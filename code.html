@@ -1,0 +1,407 @@
+<!DOCTYPE html><html class="dark" lang="en" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>DynaK Wet Leak Test Station</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "tertiary": "#ffb3ac",
+                        "primary-container": "#005fb8",
+                        "on-primary-container": "#cadcff",
+                        "primary-fixed-dim": "#a8c8ff",
+                        "surface-variant": "#333537",
+                        "inverse-surface": "#e2e2e5",
+                        "on-primary-fixed": "#001b3d",
+                        "on-surface-variant": "#c2c6d4",
+                        "on-secondary-fixed-variant": "#00513b",
+                        "tertiary-container": "#bc1c21",
+                        "outline-variant": "#424752",
+                        "on-primary-fixed-variant": "#00468b",
+                        "surface-container-highest": "#333537",
+                        "on-tertiary-fixed-variant": "#930010",
+                        "on-error-container": "#ffdad6",
+                        "inverse-on-surface": "#2f3133",
+                        "secondary-fixed": "#8df7cc",
+                        "inverse-primary": "#005db5",
+                        "primary": "#a8c8ff",
+                        "surface-tint": "#a8c8ff",
+                        "on-tertiary": "#680008",
+                        "secondary-fixed-dim": "#71dab1",
+                        "surface-container-lowest": "#0c0e10",
+                        "background": "#121416",
+                        "on-primary": "#003062",
+                        "secondary": "#71dab1",
+                        "on-secondary-container": "#003122",
+                        "error-container": "#93000a",
+                        "tertiary-fixed-dim": "#ffb3ac",
+                        "surface": "#121416",
+                        "on-secondary": "#003827",
+                        "surface-container-high": "#282a2c",
+                        "on-error": "#690005",
+                        "outline": "#8c919d",
+                        "surface-dim": "#121416",
+                        "primary-fixed": "#d6e3ff",
+                        "on-tertiary-container": "#ffd0cb",
+                        "on-secondary-fixed": "#002116",
+                        "surface-container-low": "#1a1c1e",
+                        "secondary-container": "#34a27d",
+                        "on-background": "#e2e2e5",
+                        "on-tertiary-fixed": "#410003",
+                        "surface-bright": "#37393b",
+                        "surface-container": "#1e2022",
+                        "tertiary-fixed": "#ffdad6",
+                        "on-surface": "#e2e2e5",
+                        "error": "#ffb4ab"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "margin": "24px",
+                        "md": "16px",
+                        "xl": "32px",
+                        "lg": "24px",
+                        "gutter": "16px",
+                        "sm": "8px",
+                        "xs": "4px",
+                        "unit": "4px"
+                    },
+                    "fontFamily": {
+                        "display-lg": ["Inter"],
+                        "label-sm": ["Inter"],
+                        "data-lg": ["JetBrains Mono"],
+                        "mono-label": ["JetBrains Mono"],
+                        "headline-md": ["Inter"],
+                        "body-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "display-lg": ["32px", { "lineHeight": "40px", "fontWeight": "700" }],
+                        "label-sm": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "data-lg": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "mono-label": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .industrial-border { border: 1px solid theme('colors.outline-variant'); }
+        .interactive-border { border: 1px solid theme('colors.outline-variant'); }
+        .interactive-border:focus, .interactive-border:active { border-color: theme('colors.primary'); outline: none; }
+        .status-green { background-color: theme('colors.secondary-container'); color: theme('colors.on-secondary-container'); }
+        .status-red { background-color: theme('colors.error-container'); color: theme('colors.on-error-container'); }
+        .text-status-red { color: theme('colors.error'); }
+        .text-status-amber { color: theme('colors.tertiary'); }
+    </style>
+</head>
+<body class="bg-background text-on-background min-h-screen flex flex-col font-body-md overflow-hidden">
+<!-- Top Navigation Area -->
+<header class="bg-surface border-b border-outline-variant flex justify-between items-center px-lg h-16 w-full z-50 shrink-0">
+<div class="flex items-center min-w-0">
+<img alt="DYNA-K WET LEAK TEST STATION" class="w-[min(540px,38vw)] max-w-full h-auto max-h-[50px] object-contain object-left" src="src/DynaK.Service/wwwroot/images/dynak-header.png"/>
+</div>
+<div class="flex items-center gap-md font-mono-label text-mono-label">
+<div class="flex items-center gap-sm mr-4">
+<span class="text-on-surface-variant">12-Aug-2026</span>
+<span class="text-on-surface-variant font-bold">14:42:18</span>
+<span class="text-on-surface-variant border-l border-outline-variant pl-sm ml-sm">SHIFT A</span>
+</div>
+<div class="status-green px-sm py-[2px] rounded font-label-sm text-label-sm uppercase flex items-center gap-xs">
+<span class="w-2 h-2 rounded-full bg-on-secondary-container"></span>
+                PLC CONNECTED
+            </div>
+<div class="status-green px-sm py-[2px] rounded font-label-sm text-label-sm uppercase flex items-center gap-xs">
+<span class="w-2 h-2 rounded-full bg-on-secondary-container"></span>
+                RUNNING
+            </div>
+<button class="ml-sm p-sm hover:bg-surface-variant rounded transition-colors text-on-surface-variant group">
+<span class="material-symbols-outlined group-hover:text-primary transition-colors" data-icon="settings">settings</span>
+</button>
+<button class="p-sm hover:bg-surface-variant rounded transition-colors text-on-surface-variant group">
+<span class="material-symbols-outlined group-hover:text-primary transition-colors" data-icon="account_circle">account_circle</span>
+</button>
+</div>
+</header>
+<div class="flex flex-1 overflow-hidden">
+<!-- Side Navigation (Shared Component implementation) -->
+<nav class="bg-surface-container border-r border-outline-variant w-20 flex flex-col items-center py-md z-40 shrink-0">
+
+<div class="flex flex-col gap-sm w-full px-2">
+<!-- Active Nav Item -->
+<button aria-label="Current Test" class="bg-primary-container text-on-primary-container rounded-lg p-2 flex flex-col items-center justify-center gap-1 w-full relative">
+<div class="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-primary rounded-r"></div>
+<span class="material-symbols-outlined" data-icon="precision_manufacturing" data-weight="fill" style="font-variation-settings: &quot;FILL&quot; 1;">precision_manufacturing</span>
+<span class="text-[9px] font-bold uppercase tracking-wider mt-1 text-center leading-tight w-full truncate">Current<br>Test</span>
+</button>
+<button aria-label="History" class="text-on-surface-variant p-2 flex flex-col items-center justify-center gap-1 w-full hover:bg-surface-variant rounded-lg transition-colors">
+<span class="material-symbols-outlined" data-icon="history">history</span>
+<span class="text-[9px] uppercase tracking-wider mt-1 text-center leading-tight w-full truncate">History</span>
+</button>
+
+<button aria-label="Faults" class="text-on-surface-variant p-2 flex flex-col items-center justify-center gap-1 w-full hover:bg-surface-variant rounded-lg transition-colors">
+<span class="material-symbols-outlined" data-icon="error">error</span>
+<span class="text-[9px] uppercase tracking-wider mt-1 text-center leading-tight w-full truncate">Faults</span>
+</button>
+
+</div>
+</nav>
+<!-- Main Content Area -->
+<main class="flex-1 p-gutter overflow-y-auto flex flex-col gap-gutter bg-background">
+<!-- Production Counters Row -->
+<section class="grid grid-cols-4 gap-gutter shrink-0">
+<div class="bg-surface p-md industrial-border flex flex-col justify-between min-h-[96px]">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">TARGET / SHIFT</span>
+<span class="font-data-lg text-data-lg text-on-surface">450</span>
+</div>
+<div class="bg-surface p-md industrial-border flex flex-col justify-between min-h-[96px]">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">ACTUAL</span>
+<span class="font-data-lg text-data-lg text-primary">286</span>
+</div>
+<div class="bg-surface p-md industrial-border flex flex-col justify-between min-h-[96px]">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">OK</span>
+<span class="font-data-lg text-data-lg text-secondary">281</span>
+</div>
+<div class="bg-surface p-md industrial-border flex flex-col justify-between min-h-[96px]">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">NG</span>
+<span class="font-data-lg text-data-lg text-status-red">3</span>
+</div>
+</section>
+<!-- Current Part Section -->
+<section class="bg-surface industrial-border flex flex-col shrink-0">
+<div class="border-b border-outline-variant px-md py-sm bg-surface-container-low flex justify-between items-center">
+<h2 class="font-label-sm text-label-sm text-on-surface uppercase tracking-widest flex items-center gap-2">
+<span class="w-1.5 h-1.5 bg-primary rounded-full inline-block"></span>
+                        CURRENT PART
+                    </h2>
+<div class="flex gap-2">
+<div class="status-green px-4 py-1 rounded font-label-sm text-label-sm uppercase flex items-center gap-2 industrial-border font-bold tracking-wider"><span class="w-2 h-2 rounded-full bg-on-secondary-container"></span>MACHINE RUNNING</div>
+</div>
+</div>
+<div class="p-md grid grid-cols-4 gap-y-lg gap-x-md">
+<div class="flex flex-col gap-xs">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">QR CODE</span>
+<span class="font-mono-label text-mono-label text-on-surface truncate cursor-pointer hover:text-primary transition-colors" onclick="toggleDrawer()">DYN240812000286</span>
+</div>
+<div class="flex flex-col gap-xs">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">PART NO.</span>
+<span class="font-mono-label text-mono-label text-on-surface">78654-A01</span>
+</div>
+<div class="flex flex-col gap-xs col-span-2 row-span-2 bg-surface-container-lowest p-md industrial-border flex items-center justify-center relative">
+<span class="absolute top-2 left-3 font-label-sm text-label-sm text-on-surface-variant uppercase">LEAK TEST VALUE</span>
+<div class="flex items-baseline gap-2 mt-4">
+<span class="font-data-lg text-[48px] leading-none text-primary font-bold">0.018</span>
+<span class="font-mono-label text-on-surface-variant">bar</span>
+</div><div class="flex flex-col items-center mt-2">
+    <span class="font-label-sm text-[10px] text-on-surface-variant uppercase tracking-wider">PLC SCANNED QR</span>
+    <span class="font-mono-label text-mono-label text-on-surface-variant">DYN240812000286</span>
+</div>
+</div>
+<div class="flex flex-col gap-xs">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">RESULT</span>
+<div class="self-start status-green px-2 py-0.5 rounded font-label-sm text-label-sm uppercase mt-1 inline-flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]" data-icon="check_circle">check_circle</span>
+                            OK
+                        </div>
+</div>
+<div class="flex flex-col gap-xs">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">MODE</span>
+<span class="font-mono-label text-mono-label text-on-surface">AUTO</span>
+</div>
+<div class="flex flex-col gap-xs">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">ERROR</span>
+<span class="font-mono-label text-mono-label text-on-surface-variant">None</span>
+</div>
+</div>
+</section>
+<!-- Recent Parts History -->
+<section class="bg-surface industrial-border flex flex-col flex-1 min-h-[250px]">
+<div class="border-b border-outline-variant px-md py-sm bg-surface-container-low flex justify-between items-center">
+<h2 class="font-label-sm text-label-sm text-on-surface uppercase tracking-widest flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px] text-on-surface-variant" data-icon="list">list</span>
+                        RECENT PARTS
+                    </h2>
+<button class="text-primary hover:text-primary-fixed font-label-sm text-label-sm uppercase transition-colors">VIEW ALL</button>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface border-b border-outline-variant font-label-sm text-label-sm text-on-surface-variant uppercase">
+<th class="p-sm font-semibold w-24">Time</th>
+<th class="p-sm font-semibold">QR Code</th>
+<th class="p-sm font-semibold w-32">Part No.</th>
+<th class="p-sm font-semibold w-28 text-right">Leak Value</th>
+<th class="p-sm font-semibold w-24 text-center">Result</th>
+<th class="p-sm font-semibold w-24 text-center">Mode</th>
+<th class="p-sm font-semibold">Error</th>
+</tr>
+</thead>
+<tbody class="font-mono-label text-mono-label">
+<tr class="border-b border-surface-container hover:bg-surface-variant transition-colors cursor-pointer group" onclick="toggleDrawer()">
+<td class="p-sm text-on-surface-variant">14:42:14</td>
+<td class="p-sm text-on-surface group-hover:text-primary transition-colors">DYN240812000286</td>
+<td class="p-sm text-on-surface">78654-A01</td>
+<td class="p-sm text-on-surface text-right">0.018 bar</td>
+<td class="p-sm text-center">
+<span class="status-green px-1.5 py-0.5 rounded text-[10px] font-bold">OK</span>
+</td>
+<td class="p-sm text-on-surface-variant text-center">AUTO</td>
+<td class="p-sm text-on-surface-variant">-</td>
+</tr>
+<tr class="bg-surface-container-low border-b border-surface-container hover:bg-surface-variant transition-colors cursor-pointer group" onclick="toggleDrawer()">
+<td class="p-sm text-on-surface-variant">14:39:02</td>
+<td class="p-sm text-on-surface group-hover:text-primary transition-colors">DYN240812000285</td>
+<td class="p-sm text-on-surface">78654-A01</td>
+<td class="p-sm text-on-surface text-right">0.021 bar</td>
+<td class="p-sm text-center">
+<span class="status-green px-1.5 py-0.5 rounded text-[10px] font-bold">OK</span>
+</td>
+<td class="p-sm text-on-surface-variant text-center">AUTO</td><td class="p-sm text-on-surface-variant text-center">12.2 s</td>
+<td class="p-sm text-on-surface-variant">-</td>
+</tr>
+<!-- NG Row -->
+<tr class="bg-error-container/10 border-b border-error/20 hover:bg-error-container/20 transition-colors cursor-pointer group" onclick="toggleDrawer()">
+<td class="p-sm text-on-surface-variant">14:35:45</td>
+<td class="p-sm text-on-surface group-hover:text-primary transition-colors">DYN240812000284</td>
+<td class="p-sm text-on-surface">78654-A01</td>
+<td class="p-sm text-status-red text-right font-bold">0.145 bar</td>
+<td class="p-sm text-center">
+<span class="status-red px-1.5 py-0.5 rounded text-[10px] font-bold">NG</span>
+</td>
+<td class="p-sm text-on-surface-variant text-center">AUTO</td><td class="p-sm text-on-surface-variant text-center">12.8 s</td>
+<td class="p-sm text-status-red">PRESSURE_DROP</td>
+</tr>
+<tr class="bg-surface-container-low border-b border-surface-container hover:bg-surface-variant transition-colors cursor-pointer group" onclick="toggleDrawer()">
+<td class="p-sm text-on-surface-variant">14:32:10</td>
+<td class="p-sm text-on-surface group-hover:text-primary transition-colors">DYN240812000283</td>
+<td class="p-sm text-on-surface">78654-A01</td>
+<td class="p-sm text-on-surface text-right">0.019 bar</td>
+<td class="p-sm text-center">
+<span class="status-green px-1.5 py-0.5 rounded text-[10px] font-bold">OK</span>
+</td>
+<td class="p-sm text-on-surface-variant text-center">AUTO</td><td class="p-sm text-on-surface-variant text-center">12.3 s</td>
+<td class="p-sm text-on-surface-variant">-</td>
+</tr>
+<tr class="hover:bg-surface-variant transition-colors cursor-pointer group" onclick="toggleDrawer()">
+<td class="p-sm text-on-surface-variant">14:28:55</td>
+<td class="p-sm text-on-surface group-hover:text-primary transition-colors">DYN240812000282</td>
+<td class="p-sm text-on-surface">78654-A01</td>
+<td class="p-sm text-on-surface text-right">0.022 bar</td>
+<td class="p-sm text-center">
+<span class="status-green px-1.5 py-0.5 rounded text-[10px] font-bold">OK</span>
+</td>
+<td class="p-sm text-on-surface-variant text-center">AUTO</td><td class="p-sm text-on-surface-variant text-center">12.5 s</td>
+<td class="p-sm text-on-surface-variant">-</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+</main>
+</div>
+<!-- Overlay & Drawer -->
+<div class="fixed inset-0 bg-background/80 backdrop-blur-sm z-[60] hidden transition-opacity" id="drawer-overlay" onclick="toggleDrawer()"></div>
+<div class="fixed top-0 right-0 h-full w-96 bg-surface-container-highest border-l border-outline-variant z-[70] transform translate-x-full transition-transform duration-300 ease-in-out flex flex-col shadow-2xl" id="part-drawer">
+<div class="flex justify-between items-center p-md border-b border-outline-variant bg-surface">
+<h2 class="font-headline-md text-headline-md text-on-surface uppercase tracking-wider flex items-center gap-2">
+<span class="material-symbols-outlined" data-icon="info">info</span>
+                PART DETAILS
+            </h2>
+<button class="text-on-surface-variant hover:text-on-surface transition-colors p-1 rounded hover:bg-surface-variant" onclick="toggleDrawer()">
+<span class="material-symbols-outlined" data-icon="close">close</span>
+</button>
+</div>
+<div class="p-md flex-1 overflow-y-auto flex flex-col gap-md">
+<!-- Header Block inside Drawer -->
+<div class="bg-surface p-md industrial-border flex flex-col gap-sm">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">QR CODE</span>
+<span class="font-data-lg text-[20px] text-on-surface break-all">DYN240812000286</span>
+<div class="flex items-center gap-2 mt-2">
+<div class="status-green px-2 py-1 rounded font-label-sm text-label-sm uppercase inline-flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]" data-icon="check_circle">check_circle</span>
+                        RESULT: OK
+                    </div>
+</div>
+</div>
+<!-- Meta List -->
+<div class="bg-surface industrial-border">
+<ul class="flex flex-col divide-y divide-outline-variant">
+<li class="p-sm px-md flex justify-between items-center">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">PART NO.</span>
+<span class="font-mono-label text-mono-label text-on-surface">78654-A01</span>
+</li>
+<li class="p-sm px-md flex justify-between items-center bg-surface-container-low">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">DATE</span>
+<span class="font-mono-label text-mono-label text-on-surface">12-Aug-2026</span>
+</li>
+<li class="p-sm px-md flex justify-between items-center">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">TIME</span>
+<span class="font-mono-label text-mono-label text-on-surface">14:42:14</span>
+</li>
+<li class="p-sm px-md flex justify-between items-center bg-surface-container-low">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">SHIFT</span>
+<span class="font-mono-label text-mono-label text-on-surface">SHIFT A</span>
+</li>
+<li class="p-sm px-md flex justify-between items-center">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">LEAK VALUE</span>
+<span class="font-mono-label text-mono-label text-primary font-bold">0.018 bar</span>
+</li>
+<li class="p-sm px-md flex justify-between items-center bg-surface-container-low">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">MODE</span>
+<span class="font-mono-label text-mono-label text-on-surface">AUTO</span>
+</li>
+<li class="p-sm px-md flex justify-between items-center">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">ERROR</span>
+<span class="font-mono-label text-mono-label text-on-surface-variant">None</span>
+</li>
+<li class="p-sm px-md flex justify-between items-center bg-surface-container-low">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">STATUS</span>
+<span class="font-mono-label text-mono-label text-on-surface">SAVED TO DB</span>
+</li>
+</ul>
+</div>
+<!-- Actions -->
+<div class="mt-auto pt-md flex gap-sm">
+<button class="flex-1 bg-surface-variant hover:bg-surface-bright text-on-surface border border-outline-variant py-2 rounded font-label-sm uppercase transition-colors">PRINT TAG</button>
+<button class="flex-1 bg-primary-container hover:bg-primary text-on-primary-container hover:text-on-primary border border-primary py-2 rounded font-label-sm uppercase transition-colors">RE-TEST</button>
+</div>
+</div>
+</div>
+<script>
+        function toggleDrawer() {
+            const drawer = document.getElementById('part-drawer');
+            const overlay = document.getElementById('drawer-overlay');
+            
+            if (drawer.classList.contains('translate-x-full')) {
+                // Open
+                drawer.classList.remove('translate-x-full');
+                overlay.classList.remove('hidden');
+                // Small delay to allow display block to take effect before opacity transition
+                setTimeout(() => {
+                    overlay.classList.add('opacity-100');
+                }, 10);
+            } else {
+                // Close
+                drawer.classList.add('translate-x-full');
+                overlay.classList.remove('opacity-100');
+                // Wait for opacity transition before hiding
+                setTimeout(() => {
+                    overlay.classList.add('hidden');
+                }, 300);
+            }
+        }
+    </script>
+
+
+</body></html>

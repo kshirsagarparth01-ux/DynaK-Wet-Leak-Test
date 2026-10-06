@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/DynaK.WetLeakTest.Desktop/DynaK.WetLeakTest.Desktop.csproj" />
+    <Project Path="src/DynaK.Service/DynaK.Service.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/DynaK.Tests/DynaK.Tests.csproj" />
+  </Folder>
+</Solution>

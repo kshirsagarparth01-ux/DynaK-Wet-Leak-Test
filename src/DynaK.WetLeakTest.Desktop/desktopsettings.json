@@ -1,0 +1,8 @@
+{
+  "backend": {
+    "baseUrl": "http://127.0.0.1:5055/",
+    "serviceName": "DynaK.WetLeakTest.Acquisition",
+    "executablePath": "service/DynaK.Service.exe",
+    "startupTimeoutSeconds": 30
+  }
+}
