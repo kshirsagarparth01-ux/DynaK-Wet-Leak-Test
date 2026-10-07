@@ -4,7 +4,7 @@ public sealed record LogicalPartQuery(
     DateTimeOffset? From,
     DateTimeOffset? ToExclusive,
     string? Shift,
-    string? PartNumber,
-    string? QrCode,
+    string? SerialNumber,
+    string? ModelNumber,
     string? Result,
     int? Limit = 200);
