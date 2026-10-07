@@ -41,13 +41,17 @@ The acquisition worker runs independently of the operator UI:
 
 SQLite is the durable local source of truth. Initialization enables WAL mode and creates:
 
-* `logical_parts` (one row per station+QR physical part)
+<!-- //code change by chatgpt -->
+<!-- * `logical_parts` (one row per station+QR physical part) -->
+* `logical_parts` (active lookup uses station + Part Number pending the planned Serial Number identity redesign; legacy QR storage may remain in older SQLite schemas)
 * `production_records` (one immutable row per PLC test attempt)
 * `machine_events`
 * `app_config` (legacy compatibility table; new settings are not stored here)
 * `schema_migrations`
 
-Indexes cover logical-part recency, timestamp, QR code, part number, shift, result, and PLC sequence ID. Duplicate pulse protection remains enforced by a unique constraint on `station_id + plc_sequence_id`. Existing production rows are linked to logical parts non-destructively during schema migration 3.
+<!-- //code change by chatgpt -->
+<!-- Indexes cover logical-part recency, timestamp, QR code, part number, shift, result, and PLC sequence ID. Duplicate pulse protection remains enforced by a unique constraint on `station_id + plc_sequence_id`. Existing production rows are linked to logical parts non-destructively during schema migration 3. -->
+Indexes cover logical-part recency, timestamp, part number, shift, result, and PLC sequence ID. Duplicate pulse protection remains enforced by a unique constraint on `station_id + plc_sequence_id`. Existing production rows are linked to logical parts non-destructively during historical schema migrations. Legacy `qr_code` columns/indexes may remain in existing databases for compatibility, but active acquisition, lookup, filtering, and identity no longer use QR.
 
 Settings are persisted as a typed JSON snapshot in `C:\ProgramData\DynaK\Wet Leak Test Station\config\appsettings.json`, outside the SQLite database whose path it controls. Saves use a temporary file plus replace operation. The snapshot includes the database, live-text-file and report locations, Leak OK limits, automatic daily-export state, station identity, PLC connection values, configured shifts, D-register Modbus offset, editable PLC signal/register ranges, byte order, and value maps. Schema version 7 removes obsolete timing/lifecycle columns and stores the complete configured PLC signal snapshot for each Part Data Ready pulse; `lower_limit` and `upper_limit` preserve the limits used by each historical part.
 
