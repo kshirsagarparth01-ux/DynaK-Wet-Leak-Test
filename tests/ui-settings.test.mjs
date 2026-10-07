@@ -56,6 +56,9 @@ for (const name of [
   "liveSignalText",
   "formatLeakTestValue",
   "formatLeakRange",
+  //code change by chatgpt
+  // "renderCurrentPart",
+  "leakUnit",
   "renderCurrentPart",
   "resultClass",
   "renderBuildInfo"
@@ -343,10 +346,24 @@ test("desktop clears persistent WebView renderer caches before loading the HMI",
 });
 
 function extractFunction(name) {
+  //code change by chatgpt
+  // const start = source.indexOf(`function ${name}(`);
+  // assert.notEqual(start, -1, `function ${name} was not found in app.js`);
+  // const next = source.indexOf("\nfunction ", start + 1);
+  // return source.slice(start, next < 0 ? source.length : next);
+  const pattern = new RegExp(`^function ${name.replace(/[.*+?^\${}()|[\\]\\]/g, "\\function extractFunction(name) {
   const start = source.indexOf(`function ${name}(`);
   assert.notEqual(start, -1, `function ${name} was not found in app.js`);
   const next = source.indexOf("\nfunction ", start + 1);
   return source.slice(start, next < 0 ? source.length : next);
+}")}\\(`, "m");
+  const match = pattern.exec(source);
+  assert.notEqual(match, null, `function ${name} was not found in app.js`);
+  const start = match.index;
+  const remainder = source.slice(start + 1);
+  const nextMatch = /^function\s+[A-Za-z_$][\\w$]*\s*\(/m.exec(remainder);
+  const next = nextMatch ? start + 1 + nextMatch.index : source.length;
+  return source.slice(start, next);
 }
 
 function control(value = "") {
