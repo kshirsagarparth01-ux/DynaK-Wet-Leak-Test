@@ -98,7 +98,9 @@ app.MapGet("/api/state", async (ProductionRepository records, AcquisitionState s
     var current = settings.Current;
     var now = DateTimeOffset.Now;
     var window = new ShiftResolver(current.Shifts).ResolveWindow(now);
-    var recent = await records.QueryLogicalPartsAsync(new LogicalPartQuery(null, null, null, null, null, null, 10), ct);
+    //code change by chatgpt
+    // var recent = await records.QueryLogicalPartsAsync(new LogicalPartQuery(null, null, null, null, null, null, 10), ct);
+    var recent = await records.QueryLogicalPartsAsync(new LogicalPartQuery(null, null, null, null, null, 10), ct);
     return Results.Ok(state.Snapshot(recent, current, window, now));
 });
 
@@ -133,12 +135,15 @@ app.MapGet("/api/records", async (
     string? to,
     string? shift,
     string? partNumber,
-    string? qrCode,
+    //code change by chatgpt
+    // string? qrCode,
     string? result,
     int? limit,
     CancellationToken ct) =>
 {
-    var query = BuildLogicalPartQuery(from, to, shift, partNumber, qrCode, result, limit ?? 200);
+    //code change by chatgpt
+    // var query = BuildLogicalPartQuery(from, to, shift, partNumber, qrCode, result, limit ?? 200);
+    var query = BuildLogicalPartQuery(from, to, shift, partNumber, result, limit ?? 200);
     return Results.Ok(await records.QueryLogicalPartsAsync(query, ct));
 });
 
@@ -149,11 +154,14 @@ app.MapGet("/api/records/export/excel", async (
     string? to,
     string? shift,
     string? partNumber,
-    string? qrCode,
+    //code change by chatgpt
+    // string? qrCode,
     string? result,
     CancellationToken ct) =>
 {
-    var query = BuildLogicalPartQuery(from, to, shift, partNumber, qrCode, result, limit: null);
+    //code change by chatgpt
+    // var query = BuildLogicalPartQuery(from, to, shift, partNumber, qrCode, result, limit: null);
+    var query = BuildLogicalPartQuery(from, to, shift, partNumber, result, limit: null);
     var parts = await records.QueryLogicalPartsAsync(query, ct);
     var exportedAt = DateTimeOffset.Now;
     var fileName = PartHistoryExcelExporter.CreateFileName(exportedAt);
@@ -263,7 +271,8 @@ static LogicalPartQuery BuildLogicalPartQuery(
     string? to,
     string? shift,
     string? partNumber,
-    string? qrCode,
+    //code change by chatgpt
+    // string? qrCode,
     string? result,
     int? limit)
 {
@@ -272,7 +281,8 @@ static LogicalPartQuery BuildLogicalPartQuery(
         ParseDate(to)?.AddDays(1),
         shift,
         partNumber,
-        qrCode,
+        //code change by chatgpt
+        // qrCode,
         result,
         limit);
 }
