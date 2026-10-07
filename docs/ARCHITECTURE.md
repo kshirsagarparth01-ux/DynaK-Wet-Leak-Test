@@ -33,7 +33,7 @@ The acquisition worker runs independently of the operator UI:
 7. Whenever Part Data Ready is HIGH and the current Part Number is valid, non-zero, and absent from History, immediately perform a second complete read of every enabled readable mapping and capture one immutable part-data snapshot.
 8. Insert exactly one complete SQLite row for that Part Number. Held HIGH polls skip already-saved Part Numbers, a changed Part Number is captured without waiting for LOW, and a failed insert retries on later HIGH polls without marking the Part Number processed.
 9. Atomically replace the configured live Leak Test Value text file with the exact decimal value from the committed snapshot, skipping a rewrite when its content is unchanged.
-10. Raise the configured Data Saved ON value only after both SQLite persistence and the live-file step succeed, then write the configured OFF value after about one second.
+10. Raise the configured Data Saved ON value only after both SQLite persistence and the live-file step succeed, keep it ON for about two seconds, then explicitly write the configured OFF value. If either acknowledgement write fails, retry the acknowledgement without inserting another History row.
 11. Update in-memory live values and diagnostics for the operator UI independently of production-record completeness.
 12. Generate canonical per-day XLSX reports from SQLite rows in the background, recover missed reports after service restart, and replace files atomically without making acquisition depend on Excel success.
 
