@@ -215,6 +215,28 @@ await RunAsync("v7 migration removes obsolete timing lifecycle columns without l
 });
 
 //code change by chatgpt
+await RunAsync("new production rows keep the legacy QR column blank", async () =>
+{
+    var root = Path.Combine(Path.GetTempPath(), $"dynak-qr-compat-{Guid.NewGuid():N}");
+    var store = new SettingsStore(Options.Create(new AppSettings
+    {
+        DatabasePath = Path.Combine(root, "station.db"),
+        LiveLeakValueFilePath = Path.Combine(root, "live_leak_value.txt")
+    }), NullLogger<SettingsStore>.Instance);
+    var database = new SqliteDatabase(store, NullLogger<SqliteDatabase>.Instance);
+    await database.InitializeAsync(CancellationToken.None);
+    var records = new ProductionRepository(database);
+    var inserted = await records.InsertAsync(SampleRecord(1091) with { PartNumber = "QR-FREE-001" }, CancellationToken.None);
+    AssertTrue(inserted.Inserted && inserted.Id.HasValue, "expected QR-free production row to be inserted");
+
+    await using var connection = await database.OpenConnectionAsync(CancellationToken.None);
+    await using var command = connection.CreateCommand();
+    command.CommandText = "SELECT qr_code FROM production_records WHERE id = $id;";
+    command.Parameters.AddWithValue("$id", inserted.Id!.Value);
+    AssertEqual("", Convert.ToString(await command.ExecuteScalarAsync(CancellationToken.None)) ?? "");
+});
+
+//code change by chatgpt
 // await RunAsync("NG and rework attempts share one logical QR part", async () =>
 await RunAsync("NG and rework attempts share one logical Part Number", async () =>
 {
@@ -563,6 +585,34 @@ await RunSync("persisted settings cannot redirect the machine-owned database pat
     });
 
     AssertEqual(configured.DatabasePath, store.Current.DatabasePath);
+});
+
+//code change by chatgpt
+await RunSync("persisted QR PLC mapping is removed while unrelated mappings are preserved", () =>
+{
+    var configured = new AppSettings();
+    var persisted = configured.Clone();
+    persisted.SignalMappings = PlcSignalMapping.CreateDefaults();
+    persisted.SignalMappings.Add(new PlcSignalMapping
+    {
+        SignalName = "QR Code Value",
+        Address = "D2050",
+        AddressType = "D Register",
+        DataType = "AsciiString",
+        Direction = "Read",
+        Length = 10,
+        Encoding = "ASCII",
+        Enabled = true
+    });
+    var store = new SettingsStore(Options.Create(configured), NullLogger<SettingsStore>.Instance);
+
+    store.ApplyPersisted(new Dictionary<string, string>
+    {
+        ["app_settings_json"] = JsonSerializer.Serialize(persisted, new JsonSerializerOptions(JsonSerializerDefaults.Web))
+    });
+
+    AssertTrue(store.Current.SignalMappings.All(mapping => !mapping.SignalName.Equals("QR Code Value", StringComparison.OrdinalIgnoreCase)), "legacy QR mapping must not survive settings merge");
+    AssertTrue(store.Current.SignalMappings.Any(mapping => mapping.SignalName == "Part Number"), "Part Number mapping must remain present");
 });
 
 await RunSync("invalid configuration is rejected", () =>
