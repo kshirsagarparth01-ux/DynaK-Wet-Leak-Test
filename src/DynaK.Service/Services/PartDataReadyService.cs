@@ -26,6 +26,7 @@ public sealed class PartDataReadyService
     private DateTimeOffset _nextRetryAt;
     private string? _observedPartNumber;
     private bool? _observedPartAlreadySaved;
+    private bool _observedPartAcknowledged;
     private string? _pendingPartNumber;
     private string? _lastLoggedPartNumberInput;
     private string? _lastLoggedReadyInput;
@@ -58,6 +59,7 @@ public sealed class PartDataReadyService
         _nextRetryAt = default;
         _observedPartNumber = null;
         _observedPartAlreadySaved = null;
+        _observedPartAcknowledged = false;
         _pendingPartNumber = null;
         _lastLoggedPartNumberInput = null;
         _lastLoggedReadyInput = null;
@@ -116,6 +118,7 @@ public sealed class PartDataReadyService
         {
             _observedPartNumber = currentPartNumber;
             _observedPartAlreadySaved = null;
+            _observedPartAcknowledged = false;
             _pendingPartNumber = null;
             _lastLoggedSaveDecision = null;
             if (IsValidPartNumber(currentPartNumber))
@@ -156,6 +159,54 @@ public sealed class PartDataReadyService
         }
 
         var alreadySaved = _observedPartAlreadySaved == true;
+
+        if (databaseReady &&
+            alreadySaved &&
+            readyHigh == true &&
+            !_observedPartAcknowledged)
+        {
+            if (DateTimeOffset.Now < _nextRetryAt)
+            {
+                LogSaveDecision(
+                    false,
+                    readyHigh,
+                    true,
+                    true,
+                    "the durable Part Number is awaiting a DATA SAVED acknowledgement retry");
+                return;
+            }
+
+            var recoveredAcknowledgement = await _handshake.PulseDataSavedAsync(cancellationToken);
+            if (recoveredAcknowledgement)
+            {
+                MarkPartAcknowledged(currentPartNumber);
+                _nextRetryAt = default;
+                _triggerState = PartDataReadyState.ARMED;
+                await _events.ClearActiveByTypeAsync(
+                    settings.StationId,
+                    "PLC_HANDSHAKE_ERROR",
+                    DateTimeOffset.Now,
+                    cancellationToken);
+                _logger.LogInformation(
+                    "Part {PartNumber} was already durable in History and DATA SAVED was acknowledged without creating another row.",
+                    currentPartNumber);
+            }
+            else
+            {
+                await _events.StartActiveAsync(
+                    settings.StationId,
+                    "PLC_HANDSHAKE_ERROR",
+                    "ERROR",
+                    "DATA_SAVED_WRITE_FAILED",
+                    "Configured DATA SAVED signal could not complete its ON/OFF acknowledgement for the already durable History record. The acknowledgement will retry without inserting another row.",
+                    DateTimeOffset.Now,
+                    cancellationToken);
+                ScheduleRetry();
+            }
+
+            return;
+        }
+
         var saveConditionSatisfied = databaseReady && !alreadySaved &&
             _pendingPartNumber is not null && readyHigh == true;
         LogSaveDecision(
@@ -213,6 +264,7 @@ public sealed class PartDataReadyService
                     snapshotPartNumber);
                 _observedPartNumber = snapshotPartNumber;
                 _observedPartAlreadySaved = null;
+                _observedPartAcknowledged = false;
                 _pendingPartNumber = null;
                 _logger.LogInformation("New Part Number detected: {PartNumber}", snapshotPartNumber);
                 if (await IsAlreadySavedAsync(settings.StationId, snapshotPartNumber, cancellationToken))
@@ -427,35 +479,37 @@ public sealed class PartDataReadyService
         }
 
         var dataSavedAcknowledged = await _handshake.PulseDataSavedAsync(cancellationToken);
-        if (dataSavedAcknowledged)
-        {
-            await _events.ClearActiveByTypeAsync(settings.StationId, "PLC_HANDSHAKE_ERROR", DateTimeOffset.Now, cancellationToken);
-        }
-        else
+        await TrackFaultStateAsync(_pending.Record, cancellationToken);
+
+        if (!dataSavedAcknowledged)
         {
             await _events.StartActiveAsync(
                 settings.StationId,
                 "PLC_HANDSHAKE_ERROR",
                 "ERROR",
                 "DATA_SAVED_WRITE_FAILED",
-                "Configured DATA SAVED signal could not be written after the complete database record and live text-file update. Local History acquisition will continue.",
+                "Configured DATA SAVED signal could not complete its required ON/OFF acknowledgement after the complete database record and live text-file update. The acknowledgement will retry without inserting another History row.",
                 DateTimeOffset.Now,
                 cancellationToken);
+            _logger.LogWarning(
+                "Part {PartNumber} is durable in local History, but its DATA SAVED acknowledgement is incomplete and will be retried.",
+                _pending.Record.PartNumber);
+            ScheduleRetry();
+            return;
         }
 
-        await TrackFaultStateAsync(_pending.Record, cancellationToken);
+        await _events.ClearActiveByTypeAsync(
+            settings.StationId,
+            "PLC_HANDSHAKE_ERROR",
+            DateTimeOffset.Now,
+            cancellationToken);
+
         var savedPart = _pending.Record;
+        MarkPartAcknowledged(savedPart.PartNumber);
         _pending = null;
         _nextRetryAt = default;
         _triggerState = PartDataReadyState.ARMED;
-        if (dataSavedAcknowledged)
-        {
-            _logger.LogInformation("Part {PartNumber} saved and acknowledged.", savedPart.PartNumber);
-        }
-        else
-        {
-            _logger.LogWarning("Part {PartNumber} is durable in local History, but its separate DATA SAVED acknowledgement failed.", savedPart.PartNumber);
-        }
+        _logger.LogInformation("Part {PartNumber} saved and acknowledged.", savedPart.PartNumber);
     }
 
     private async Task ReportSnapshotFailureAsync(
@@ -533,6 +587,15 @@ public sealed class PartDataReadyService
         if (StringComparer.Ordinal.Equals(_pendingPartNumber, normalized))
         {
             _pendingPartNumber = null;
+        }
+    }
+
+    private void MarkPartAcknowledged(string partNumber)
+    {
+        var normalized = NormalizePartNumber(partNumber);
+        if (StringComparer.Ordinal.Equals(_observedPartNumber, normalized))
+        {
+            _observedPartAcknowledged = true;
         }
     }
 
