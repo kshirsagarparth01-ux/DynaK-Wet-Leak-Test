@@ -25,11 +25,11 @@ public sealed class PartDataReadyService
     private PendingPartData? _pending;
     private DateTimeOffset _nextRetryAt;
     private DateTimeOffset _nextExistingAcknowledgementRetryAt;
-    private string? _observedPartNumber;
-    private bool? _observedPartAlreadySaved;
+    private string? _observedSerialNumber;
+    private bool? _observedSerialAlreadySaved;
     private bool _observedExistingPartAcknowledged;
-    private string? _pendingPartNumber;
-    private string? _lastLoggedPartNumberInput;
+    private string? _pendingSerialNumber;
+    private string? _lastLoggedSerialNumberInput;
     private string? _lastLoggedReadyInput;
     private string? _lastLoggedSaveDecision;
 
@@ -59,11 +59,11 @@ public sealed class PartDataReadyService
         _pending = null;
         _nextRetryAt = default;
         _nextExistingAcknowledgementRetryAt = default;
-        _observedPartNumber = null;
-        _observedPartAlreadySaved = null;
+        _observedSerialNumber = null;
+        _observedSerialAlreadySaved = null;
         _observedExistingPartAcknowledged = false;
-        _pendingPartNumber = null;
-        _lastLoggedPartNumberInput = null;
+        _pendingSerialNumber = null;
+        _lastLoggedSerialNumberInput = null;
         _lastLoggedReadyInput = null;
         _lastLoggedSaveDecision = null;
     }
@@ -102,11 +102,11 @@ public sealed class PartDataReadyService
         IReadOnlyDictionary<string, PlcSignalValue> signals,
         CancellationToken cancellationToken)
     {
-        var partNumberRaw = ReadRawSignal(signals, "Part Number");
-        var currentPartNumber = ReadPartNumber(signals);
+        var serialRaw = ReadRawSignal(signals, PlcSignalMapping.SerialNumberSignalName);
+        var currentSerial = ReadSerialNumber(signals);
         var readyHigh = ReadPartDataReady(signals);
         var readyRaw = ReadRawSignal(signals, PlcSignalMapping.PartDataReadySignalName);
-        LogLiveInputs(partNumberRaw, currentPartNumber, readyRaw, readyHigh);
+        LogLiveInputs(serialRaw, currentSerial, readyRaw, readyHigh);
 
         await TryCompletePendingAsync(settings, cancellationToken);
         if (_pending is not null)
@@ -115,44 +115,39 @@ public sealed class PartDataReadyService
             return;
         }
 
-        var partNumberChanged = !StringComparer.Ordinal.Equals(
-            _observedPartNumber,
-            currentPartNumber);
-
-        if (partNumberChanged)
+        var serialChanged = !StringComparer.Ordinal.Equals(_observedSerialNumber, currentSerial);
+        if (serialChanged)
         {
-            _observedPartNumber = currentPartNumber;
-            _observedPartAlreadySaved = null;
+            _observedSerialNumber = currentSerial;
+            _observedSerialAlreadySaved = null;
             _observedExistingPartAcknowledged = false;
             _nextExistingAcknowledgementRetryAt = default;
-            _pendingPartNumber = null;
+            _pendingSerialNumber = null;
             _lastLoggedSaveDecision = null;
 
-            if (IsValidPartNumber(currentPartNumber))
+            if (IsValidSerialNumber(currentSerial))
             {
-                _logger.LogInformation(
-                    "New Part Number detected: {PartNumber}",
-                    currentPartNumber);
+                _logger.LogInformation("New Serial Number detected: {SerialNumber}", currentSerial);
             }
         }
 
-        if (!IsValidPartNumber(currentPartNumber))
+        if (!IsValidSerialNumber(currentSerial))
         {
             _triggerState = PartDataReadyState.ARMED;
-            LogSaveDecision(false, readyHigh, false, true, "Part Number is empty or zero");
+            LogSaveDecision(false, readyHigh, false, true, "Serial Number is empty or zero");
             return;
         }
 
         var databaseReady = true;
-        if (_observedPartAlreadySaved is null)
+        if (_observedSerialAlreadySaved is null)
         {
             try
             {
-                _observedPartAlreadySaved = await IsAlreadySavedAsync(settings.StationId, currentPartNumber, cancellationToken);
-                if (_observedPartAlreadySaved == false)
+                _observedSerialAlreadySaved = await IsAlreadySavedAsync(settings.StationId, currentSerial, cancellationToken);
+                if (_observedSerialAlreadySaved == false)
                 {
-                    _pendingPartNumber = currentPartNumber;
-                    _logger.LogInformation("Pending Part Number: {PartNumber}", _pendingPartNumber);
+                    _pendingSerialNumber = currentSerial;
+                    _logger.LogInformation("Pending Serial Number: {SerialNumber}", _pendingSerialNumber);
                 }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -162,21 +157,17 @@ public sealed class PartDataReadyService
             catch (Exception ex)
             {
                 databaseReady = false;
-                _logger.LogError(ex, "Part {PartNumber} duplicate check failed: {Message}. Will retry on the next PLC poll.", currentPartNumber, ex.Message);
+                _logger.LogError(ex, "Serial {SerialNumber} duplicate check failed: {Message}. Will retry on the next PLC poll.", currentSerial, ex.Message);
                 await _events.StartActiveAsync(settings.StationId, "DATABASE_PERSISTENCE_ERROR", "ERROR", ex.GetType().Name, ex.Message, DateTimeOffset.Now, cancellationToken);
             }
         }
 
-        var alreadySaved = _observedPartAlreadySaved == true;
-
+        var alreadySaved = _observedSerialAlreadySaved == true;
         if (alreadySaved)
         {
             if (readyHigh == true)
             {
-                await TryAcknowledgeExistingSavedPartAsync(
-                    settings,
-                    currentPartNumber,
-                    cancellationToken);
+                await TryAcknowledgeExistingSavedPartAsync(settings, currentSerial, cancellationToken);
             }
 
             if (readyHigh != true || _observedExistingPartAcknowledged)
@@ -192,17 +183,12 @@ public sealed class PartDataReadyService
                 readyHigh != true
                     ? "D1075 is not HIGH"
                     : _observedExistingPartAcknowledged
-                        ? "Part Number already exists in History and its current held-HIGH event is already acknowledged"
-                        : "Part Number already exists in History and DATA SAVED acknowledgement is pending retry");
-
+                        ? "Serial Number already exists in History and its current held-HIGH event is already acknowledged"
+                        : "Serial Number already exists in History and DATA SAVED acknowledgement is pending retry");
             return;
         }
 
-        var saveConditionSatisfied =
-            databaseReady &&
-            _pendingPartNumber is not null &&
-            readyHigh == true;
-
+        var saveConditionSatisfied = databaseReady && _pendingSerialNumber is not null && readyHigh == true;
         LogSaveDecision(
             saveConditionSatisfied,
             readyHigh,
@@ -212,7 +198,7 @@ public sealed class PartDataReadyService
                 ? "D1075 is not HIGH"
                 : !databaseReady
                     ? "database duplicate check is unavailable"
-                    : "no unsaved pending Part Number is available");
+                    : "no unsaved pending Serial Number is available");
 
         if (!saveConditionSatisfied)
         {
@@ -221,67 +207,54 @@ public sealed class PartDataReadyService
         }
 
         _logger.LogInformation("Reading production snapshot...");
-        await CaptureSnapshotAsync(settings, _pendingPartNumber!, cancellationToken);
+        await CaptureSnapshotAsync(settings, _pendingSerialNumber!, cancellationToken);
         await TryCompletePendingAsync(settings, cancellationToken);
     }
 
     private async Task TryAcknowledgeExistingSavedPartAsync(
         AppSettings settings,
-        string partNumber,
+        string serialNumber,
         CancellationToken cancellationToken)
     {
-        if (_observedExistingPartAcknowledged ||
-            DateTimeOffset.Now < _nextExistingAcknowledgementRetryAt)
+        if (_observedExistingPartAcknowledged || DateTimeOffset.Now < _nextExistingAcknowledgementRetryAt)
         {
             return;
         }
 
         _triggerState = PartDataReadyState.SAVING;
-
         _logger.LogInformation(
-            "D1075 remains HIGH for already-saved Part {PartNumber}; retrying DATA SAVED without inserting another History record.",
-            partNumber);
+            "D1075 remains HIGH for already-saved Serial {SerialNumber}; retrying DATA SAVED without inserting another History record.",
+            serialNumber);
 
-        var acknowledged = await _handshake.PulseDataSavedAsync(
-            cancellationToken);
-
+        var acknowledged = await _handshake.PulseDataSavedAsync(cancellationToken);
         if (acknowledged)
         {
             _observedExistingPartAcknowledged = true;
             _nextExistingAcknowledgementRetryAt = default;
             _triggerState = PartDataReadyState.ARMED;
-
-            await _events.ClearActiveByTypeAsync(
-                settings.StationId,
-                "PLC_HANDSHAKE_ERROR",
-                DateTimeOffset.Now,
-                cancellationToken);
-
+            await _events.ClearActiveByTypeAsync(settings.StationId, "PLC_HANDSHAKE_ERROR", DateTimeOffset.Now, cancellationToken);
             _logger.LogInformation(
-                "Already-saved Part {PartNumber} was acknowledged without creating another History record.",
-                partNumber);
-
+                "Already-saved Serial {SerialNumber} was acknowledged without creating another History record.",
+                serialNumber);
             return;
         }
 
-        _nextExistingAcknowledgementRetryAt =
-            DateTimeOffset.Now.Add(RetryDelay);
-
+        _nextExistingAcknowledgementRetryAt = DateTimeOffset.Now.Add(RetryDelay);
         await _events.StartActiveAsync(
             settings.StationId,
             "PLC_HANDSHAKE_ERROR",
             "ERROR",
             "DATA_SAVED_WRITE_FAILED",
-            $"Part {partNumber} is already durable in local History, but DATA SAVED acknowledgement failed. The acknowledgement will retry without inserting another production record.",
+            $"Serial {serialNumber} is already durable in local History, but DATA SAVED acknowledgement failed. The acknowledgement will retry without inserting another production record.",
             DateTimeOffset.Now,
             cancellationToken);
 
         _logger.LogWarning(
-            "Part {PartNumber} is already saved, but DATA SAVED acknowledgement failed. Retrying later without another database insert.",
-            partNumber);
+            "Serial {SerialNumber} is already saved, but DATA SAVED acknowledgement failed. Retrying later without another database insert.",
+            serialNumber);
     }
 
-    private async Task CaptureSnapshotAsync(AppSettings settings, string polledPartNumber, CancellationToken cancellationToken)
+    private async Task CaptureSnapshotAsync(AppSettings settings, string polledSerialNumber, CancellationToken cancellationToken)
     {
         _triggerState = PartDataReadyState.CAPTURING_SNAPSHOT;
         try
@@ -292,65 +265,83 @@ public sealed class PartDataReadyService
                 await ReportSnapshotFailureAsync(
                     settings,
                     "PART_DATA_SNAPSHOT_INCOMPLETE",
-                    $"D1075=1, Part {polledPartNumber} snapshot was incomplete. No History record was created. Will retry while trigger remains HIGH.",
+                    $"D1075=1, Serial {polledSerialNumber} snapshot was incomplete. No History record was created. Will retry while trigger remains HIGH.",
                     null,
                     cancellationToken);
                 return;
             }
 
-            var snapshotPartNumber = NormalizePartNumber(snapshot.PartNumber);
-            if (!IsValidPartNumber(snapshotPartNumber))
+            var snapshotSerialNumber = NormalizeSerialNumber(snapshot.SerialNumber);
+            if (!IsValidSerialNumber(snapshotSerialNumber))
             {
                 await ReportSnapshotFailureAsync(
                     settings,
-                    "PART_NUMBER_INVALID",
-                    $"D1075=1, but the captured Part Number '{snapshotPartNumber}' is empty or zero. Will retry while trigger remains HIGH.",
+                    "SERIAL_NUMBER_INVALID",
+                    "D1075=1, but the captured Serial Number is empty or zero. No production record was saved or acknowledged; capture will retry while the trigger remains HIGH.",
                     null,
                     cancellationToken);
                 return;
             }
 
-            if (!StringComparer.Ordinal.Equals(snapshotPartNumber, polledPartNumber))
+            var snapshotModelNumber = NormalizeModelNumber(snapshot.ModelNumber);
+            if (!IsValidModelNumber(snapshotModelNumber))
+            {
+                await ReportSnapshotFailureAsync(
+                    settings,
+                    "MODEL_NUMBER_INVALID",
+                    $"D1075=1, Serial {snapshotSerialNumber} has an empty or zero Model Number. No History record was created.",
+                    null,
+                    cancellationToken);
+                return;
+            }
+
+            if (!StringComparer.Ordinal.Equals(snapshotSerialNumber, polledSerialNumber))
             {
                 _logger.LogWarning(
-                    "Part Number changed during snapshot capture from {PolledPartNumber} to {SnapshotPartNumber}; the complete current snapshot will be evaluated.",
-                    polledPartNumber,
-                    snapshotPartNumber);
-                _observedPartNumber = snapshotPartNumber;
-                _observedPartAlreadySaved = null;
-                _pendingPartNumber = null;
-                _logger.LogInformation("New Part Number detected: {PartNumber}", snapshotPartNumber);
-                if (await IsAlreadySavedAsync(settings.StationId, snapshotPartNumber, cancellationToken))
+                    "Serial Number changed during snapshot capture from {PolledSerialNumber} to {SnapshotSerialNumber}; the complete current snapshot will be evaluated.",
+                    polledSerialNumber,
+                    snapshotSerialNumber);
+
+                _observedSerialNumber = snapshotSerialNumber;
+                _observedSerialAlreadySaved = null;
+                _pendingSerialNumber = null;
+                _logger.LogInformation("New Serial Number detected: {SerialNumber}", snapshotSerialNumber);
+
+                if (await IsAlreadySavedAsync(settings.StationId, snapshotSerialNumber, cancellationToken))
                 {
-                    MarkPartSaved(snapshotPartNumber);
+                    MarkSerialSaved(snapshotSerialNumber);
                     _triggerState = PartDataReadyState.ARMED;
                     return;
                 }
 
-                _observedPartAlreadySaved = false;
-                _pendingPartNumber = snapshotPartNumber;
-                _logger.LogInformation("Pending Part Number: {PartNumber}", snapshotPartNumber);
+                _observedSerialAlreadySaved = false;
+                _pendingSerialNumber = snapshotSerialNumber;
+                _logger.LogInformation("Pending Serial Number: {SerialNumber}", snapshotSerialNumber);
             }
 
             var snapshotValues = JsonSerializer.Serialize(snapshot.Signals, SnapshotJsonOptions);
             _logger.LogInformation("Snapshot: {SnapshotValues}", snapshotValues);
             _logger.LogInformation(
-                "Snapshot captured for Part {PartNumber}: Serial={SerialNumber}, QR={QrCode}, Leak={LeakValue} {LeakUnit}, Result={Result}, Mode={Mode}, Error={Error}, ConfiguredSignals={SignalCount}.",
-                snapshotPartNumber,
-                snapshot.SerialNumber ?? "<empty>",
-                snapshot.QrCode,
+                "Snapshot captured: Serial={SerialNumber}, Model={ModelNumber}, Leak={LeakValue} {LeakUnit}, Result={Result}, Mode={Mode}, Error={Error}, ConfiguredSignals={SignalCount}.",
+                snapshotSerialNumber,
+                snapshotModelNumber,
                 snapshot.LeakTestValue,
                 snapshot.LeakTestUnit,
                 snapshot.ResolvedResult,
                 snapshot.ResolvedMode,
                 snapshot.ErrorDescription,
                 snapshot.Signals.Count);
-            var record = await BuildRecordAsync(settings, snapshot, cancellationToken);
+
+            var record = await BuildRecordAsync(
+                settings,
+                snapshot with { SerialNumber = snapshotSerialNumber, ModelNumber = snapshotModelNumber },
+                cancellationToken);
+
             _pending = new PendingPartData(record, false, false);
             _triggerState = PartDataReadyState.SAVING;
             _nextRetryAt = default;
             await _events.ClearActiveByTypeAsync(settings.StationId, "PART_DATA_SNAPSHOT_ERROR", DateTimeOffset.Now, cancellationToken);
-            _logger.LogInformation("Saving Part {PartNumber}.", record.PartNumber);
+            _logger.LogInformation("Saving Serial {SerialNumber}, Model {ModelNumber}.", record.SerialNumber, record.ModelNumber);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -358,26 +349,21 @@ public sealed class PartDataReadyService
         }
         catch (Exception ex)
         {
-            await ReportSnapshotFailureAsync(
-                settings,
-                ex.GetType().Name,
-                ex.Message,
-                ex,
-                cancellationToken);
+            await ReportSnapshotFailureAsync(settings, ex.GetType().Name, ex.Message, ex, cancellationToken);
         }
     }
 
-    private async Task<bool> IsAlreadySavedAsync(string stationId, string partNumber, CancellationToken cancellationToken)
+    private async Task<bool> IsAlreadySavedAsync(string stationId, string serialNumber, CancellationToken cancellationToken)
     {
-        var alreadySaved = await _records.ExistsByPartNumberAsync(stationId, partNumber, cancellationToken);
-        _logger.LogInformation("Part already exists: {AlreadySaved}", alreadySaved);
+        var normalized = NormalizeSerialNumber(serialNumber);
+        var alreadySaved = await _records.ExistsBySerialNumberAsync(stationId, normalized, cancellationToken);
+        _logger.LogInformation("Serial already exists: {AlreadySaved}", alreadySaved);
         if (alreadySaved)
         {
-            _logger.LogInformation("Part {PartNumber} already saved - skipping duplicate.", partNumber);
-            return true;
+            _logger.LogInformation("Serial {SerialNumber} already saved - skipping duplicate.", normalized);
         }
 
-        return false;
+        return alreadySaved;
     }
 
     private async Task<ProductionRecord> BuildRecordAsync(
@@ -402,9 +388,8 @@ public sealed class PartDataReadyService
             0,
             settings.StationId,
             sequenceId,
-            string.IsNullOrWhiteSpace(snapshot.SerialNumber) ? null : snapshot.SerialNumber.Trim(),
-            snapshot.QrCode.Trim(),
-            snapshot.PartNumber.Trim(),
+            NormalizeSerialNumber(snapshot.SerialNumber),
+            NormalizeModelNumber(snapshot.ModelNumber),
             DateOnly.FromDateTime(snapshot.Timestamp.DateTime),
             TimeOnly.FromDateTime(snapshot.Timestamp.DateTime),
             snapshot.Timestamp,
@@ -445,9 +430,9 @@ public sealed class PartDataReadyService
             try
             {
                 _logger.LogInformation("Attempting database insert...");
-                if (await IsAlreadySavedAsync(pendingRecord.StationId, pendingRecord.PartNumber, cancellationToken))
+                if (await IsAlreadySavedAsync(pendingRecord.StationId, pendingRecord.SerialNumber, cancellationToken))
                 {
-                    MarkPartSaved(pendingRecord.PartNumber);
+                    MarkSerialSaved(pendingRecord.SerialNumber);
                     _pending = null;
                     _nextRetryAt = default;
                     _triggerState = PartDataReadyState.ARMED;
@@ -470,10 +455,10 @@ public sealed class PartDataReadyService
                     persisted = pendingRecord with { Id = insert.Id.Value };
                     _logger.LogInformation("Database insert successful: {RecordId}", persisted.Id);
                     _logger.LogInformation(
-                        "Complete Part History record {RecordId} saved for Part Data Ready sequence {SequenceId} ({PartNumber}).",
+                        "Complete Part History record {RecordId} saved for Part Data Ready sequence {SequenceId} ({SerialNumber}).",
                         persisted.Id,
                         persisted.PlcSequenceId,
-                        persisted.PartNumber);
+                        persisted.SerialNumber);
                 }
                 else
                 {
@@ -482,11 +467,11 @@ public sealed class PartDataReadyService
                 }
 
                 _pending = _pending with { Record = persisted, DatabaseComplete = true };
-                MarkPartSaved(persisted.PartNumber);
+                MarkSerialSaved(persisted.SerialNumber);
                 _state.Update(persisted);
                 _nextRetryAt = default;
                 await _events.ClearActiveByTypeAsync(settings.StationId, "DATABASE_PERSISTENCE_ERROR", DateTimeOffset.Now, cancellationToken);
-                _logger.LogInformation("Part {PartNumber} saved successfully as History record {RecordId}.", persisted.PartNumber, persisted.Id);
+                _logger.LogInformation("Serial {SerialNumber} saved successfully as History record {RecordId}.", persisted.SerialNumber, persisted.Id);
             }
             catch (Exception ex)
             {
@@ -498,8 +483,8 @@ public sealed class PartDataReadyService
         if (!_pending.LiveLeakValueFileComplete && _pending.Record.LeakTestValue is null)
         {
             _logger.LogWarning(
-                "Live leak-value text file was not updated for {PartNumber} because the captured PLC value was unavailable.",
-                _pending.Record.PartNumber);
+                "Live leak-value text file was not updated for {SerialNumber} because the captured PLC value was unavailable.",
+                _pending.Record.SerialNumber);
             _pending = _pending with { LiveLeakValueFileComplete = true };
         }
 
@@ -516,15 +501,15 @@ public sealed class PartDataReadyService
                 if (updated)
                 {
                     _logger.LogInformation(
-                        "Live text file updated for {PartNumber} at {Path}: {LeakValue}",
-                        _pending.Record.PartNumber,
+                        "Live text file updated for {SerialNumber} at {Path}: {LeakValue}",
+                        _pending.Record.SerialNumber,
                         StationDataPaths.ResolveMachinePath(settings.LiveLeakValueFilePath),
                         _pending.Record.LeakTestValue.Value.ToString(CultureInfo.InvariantCulture));
                 }
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
             {
-                _logger.LogError(ex, "Live leak value text-file update failed for {PartNumber}", _pending.Record.PartNumber);
+                _logger.LogError(ex, "Live leak value text-file update failed for {SerialNumber}", _pending.Record.SerialNumber);
                 await _events.StartActiveAsync(settings.StationId, "LIVE_LEAK_FILE_ERROR", "ERROR", ex.GetType().Name, ex.Message, DateTimeOffset.Now, cancellationToken);
                 ScheduleRetry();
                 return;
@@ -552,8 +537,8 @@ public sealed class PartDataReadyService
             ScheduleRetry();
 
             _logger.LogWarning(
-                "Part {PartNumber} is durable in local History, but DATA SAVED acknowledgement failed. The saved record remains pending for acknowledgement retry.",
-                _pending.Record.PartNumber);
+                "Serial {SerialNumber} is durable in local History, but DATA SAVED acknowledgement failed. The saved record remains pending for acknowledgement retry.",
+                _pending.Record.SerialNumber);
 
             return;
         }
@@ -571,16 +556,16 @@ public sealed class PartDataReadyService
         _triggerState = PartDataReadyState.ARMED;
 
         if (StringComparer.Ordinal.Equals(
-                _observedPartNumber,
-                NormalizePartNumber(savedPart.PartNumber)))
+                _observedSerialNumber,
+                NormalizeSerialNumber(savedPart.SerialNumber)))
         {
             _observedExistingPartAcknowledged = true;
             _nextExistingAcknowledgementRetryAt = default;
         }
 
         _logger.LogInformation(
-            "Part {PartNumber} saved and acknowledged.",
-            savedPart.PartNumber);
+            "Serial {SerialNumber} saved and acknowledged.",
+            savedPart.SerialNumber);
     }
 
     private async Task ReportSnapshotFailureAsync(
@@ -618,11 +603,11 @@ public sealed class PartDataReadyService
     {
         if (exception is null)
         {
-            _logger.LogError("D1075=1, Part {PartNumber} save failed: {Message}. Will retry while trigger remains HIGH.", record.PartNumber, message);
+            _logger.LogError("D1075=1, Serial {SerialNumber} save failed: {Message}. Will retry while trigger remains HIGH.", record.SerialNumber, message);
         }
         else
         {
-            _logger.LogError(exception, "D1075=1, Part {PartNumber} save failed: {Message}. Will retry while trigger remains HIGH.", record.PartNumber, message);
+            _logger.LogError(exception, "D1075=1, Serial {SerialNumber} save failed: {Message}. Will retry while trigger remains HIGH.", record.SerialNumber, message);
         }
 
         await _events.StartActiveAsync(record.StationId, "DATABASE_PERSISTENCE_ERROR", "ERROR", code, message, DateTimeOffset.Now, cancellationToken);
@@ -647,28 +632,28 @@ public sealed class PartDataReadyService
         _triggerState = PartDataReadyState.SAVING;
     }
 
-    private void MarkPartSaved(string partNumber)
+    private void MarkSerialSaved(string serialNumber)
     {
-        var normalized = NormalizePartNumber(partNumber);
-        if (StringComparer.Ordinal.Equals(_observedPartNumber, normalized))
+        var normalized = NormalizeSerialNumber(serialNumber);
+        if (StringComparer.Ordinal.Equals(_observedSerialNumber, normalized))
         {
-            _observedPartAlreadySaved = true;
+            _observedSerialAlreadySaved = true;
         }
 
-        if (StringComparer.Ordinal.Equals(_pendingPartNumber, normalized))
+        if (StringComparer.Ordinal.Equals(_pendingSerialNumber, normalized))
         {
-            _pendingPartNumber = null;
+            _pendingSerialNumber = null;
         }
     }
 
-    private void LogLiveInputs(string partNumberRaw, string partNumber, string readyRaw, bool? readyHigh)
+    private void LogLiveInputs(string serialNumberRaw, string serialNumber, string readyRaw, bool? readyHigh)
     {
-        var partInput = $"{partNumberRaw}|{partNumber}";
-        if (!StringComparer.Ordinal.Equals(_lastLoggedPartNumberInput, partInput))
+        var serialInput = $"{serialNumberRaw}|{serialNumber}";
+        if (!StringComparer.Ordinal.Equals(_lastLoggedSerialNumberInput, serialInput))
         {
-            _lastLoggedPartNumberInput = partInput;
-            _logger.LogInformation("Part Number raw value received: {RawValue}", partNumberRaw);
-            _logger.LogInformation("Decoded Part Number: {PartNumber}", partNumber.Length == 0 ? "<empty>" : partNumber);
+            _lastLoggedSerialNumberInput = serialInput;
+            _logger.LogInformation("Serial Number raw value received: {RawValue}", serialNumberRaw);
+            _logger.LogInformation("Decoded Serial Number: {SerialNumber}", serialNumber.Length == 0 ? "<empty>" : serialNumber);
         }
 
         var decodedReady = readyHigh.HasValue ? (readyHigh.Value ? "1" : "0") : "<unavailable>";
@@ -688,9 +673,9 @@ public sealed class PartDataReadyService
         bool databaseReady,
         string reason)
     {
-        var pendingPartNumber = _pendingPartNumber ?? _pending?.Record.PartNumber ?? "<none>";
+        var pendingSerialNumber = _pendingSerialNumber ?? _pending?.Record.SerialNumber ?? "<none>";
         var decodedReady = readyHigh.HasValue ? (readyHigh.Value ? "1" : "0") : "<unavailable>";
-        var signature = $"{pendingPartNumber}|{decodedReady}|{alreadySaved}|{databaseReady}|{saveConditionSatisfied}|{reason}";
+        var signature = $"{pendingSerialNumber}|{decodedReady}|{alreadySaved}|{databaseReady}|{saveConditionSatisfied}|{reason}";
         if (StringComparer.Ordinal.Equals(_lastLoggedSaveDecision, signature))
         {
             return;
@@ -701,8 +686,8 @@ public sealed class PartDataReadyService
         if (!saveConditionSatisfied)
         {
             _logger.LogInformation(
-                "SAVE SKIPPED: pendingPartNumber = {PendingPartNumber}; D1075 = {D1075}; alreadySaved = {AlreadySaved}; databaseReady = {DatabaseReady}. Reason: {Reason}",
-                pendingPartNumber,
+                "SAVE SKIPPED: pendingSerialNumber = {PendingSerialNumber}; D1075 = {D1075}; alreadySaved = {AlreadySaved}; databaseReady = {DatabaseReady}. Reason: {Reason}",
+                pendingSerialNumber,
                 decodedReady,
                 alreadySaved,
                 databaseReady,
@@ -746,19 +731,26 @@ public sealed class PartDataReadyService
         return TryReadHighLow(signal.InterpretedValue, out var interpreted) ? interpreted : null;
     }
 
-    private static string ReadPartNumber(IReadOnlyDictionary<string, PlcSignalValue> signals)
+    private static string ReadSerialNumber(IReadOnlyDictionary<string, PlcSignalValue> signals)
     {
-        if (!signals.TryGetValue("Part Number", out var signal) || !string.IsNullOrWhiteSpace(signal.Error))
+        if (!signals.TryGetValue(PlcSignalMapping.SerialNumberSignalName, out var signal) ||
+            !string.IsNullOrWhiteSpace(signal.Error))
         {
             return "";
         }
 
-        return NormalizePartNumber(Convert.ToString(signal.InterpretedValue ?? signal.RawValue, CultureInfo.InvariantCulture));
+        return NormalizeSerialNumber(Convert.ToString(signal.InterpretedValue ?? signal.RawValue, CultureInfo.InvariantCulture));
     }
 
-    private static string NormalizePartNumber(string? value) => (value ?? "").Trim();
+    private static string NormalizeSerialNumber(string? value) => (value ?? "").Trim();
 
-    private static bool IsValidPartNumber(string value) =>
+    private static string NormalizeModelNumber(string? value) => (value ?? "").Trim();
+
+    private static bool IsValidSerialNumber(string value) =>
+        value.Length > 0 &&
+        (!decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var numeric) || numeric != 0m);
+
+    private static bool IsValidModelNumber(string value) =>
         value.Length > 0 &&
         (!decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var numeric) || numeric != 0m);
 
