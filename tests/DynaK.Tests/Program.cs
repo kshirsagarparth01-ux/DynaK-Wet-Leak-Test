@@ -1086,12 +1086,11 @@ await RunAsync("new unsaved Part Number stays pending while LOW and saves once w
     AssertEqual(2, harness.Plc.SnapshotReadCount);
     AssertEqual(2, await harness.Records.CountAsync(CancellationToken.None));
 
-    var first = (await harness.Records.QueryAsync(//code change by chatgpt
-        // new ProductionRecordQuery(null, null, null, "READY-100", null, null)
-        new ProductionRecordQuery(null, null, null, "READY-100", null), CancellationToken.None)).Single();
-    var second = (await harness.Records.QueryAsync(//code change by chatgpt
-        // new ProductionRecordQuery(null, null, null, "READY-101", null, null)
-        new ProductionRecordQuery(null, null, null, "READY-101", null), CancellationToken.None)).Single();
+    //code change by chatgpt
+    // var first = (await harness.Records.QueryAsync(new ProductionRecordQuery(null, null, null, "READY-100", null, null), CancellationToken.None)).Single();
+    // var second = (await harness.Records.QueryAsync(new ProductionRecordQuery(null, null, null, "READY-101", null, null), CancellationToken.None)).Single();
+    var first = (await harness.Records.QueryAsync(new ProductionRecordQuery(null, null, null, "READY-100", null), CancellationToken.None)).Single();
+    var second = (await harness.Records.QueryAsync(new ProductionRecordQuery(null, null, null, "READY-101", null), CancellationToken.None)).Single();
     AssertEqual("PLC-SN-001", first.SerialNumber);
     AssertEqual(0.250m, first.LeakTestValue);
     AssertEqual(0.500m, first.UpperLimit);
