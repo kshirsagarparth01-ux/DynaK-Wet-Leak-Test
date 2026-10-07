@@ -5,7 +5,8 @@ namespace DynaK.Service.Models;
 public sealed record PartDataSnapshot(
     string StationId,
     string? SerialNumber,
-    string QrCode,
+    //code change by chatgpt
+    // string QrCode,
     string PartNumber,
     int? TargetPartsPerShift,
     int? ActualPartCount,
