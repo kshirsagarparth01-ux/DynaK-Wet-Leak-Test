@@ -27,7 +27,8 @@ Prompt 4 supplies the Mitsubishi PLC connection endpoint and D-device register l
 | Auto / Manual | `D2030` | Read | `UInt16` | Editable `ValueMap`; current initial default is `1=Auto;2=Manual`. Raw and resolved values are stored. |
 | Error | `D2035` | Read | `UInt16` | Editable placeholder `ValueMap` defaults to `0=No Error;1=Error 1;2=Error 2;3=Error 3;4=Error 4;5=Error 5`. Raw and resolved values are stored. |
 | Running Status | `D2040` | Read | `UInt16` | Editable placeholder `ValueMap` defaults to `0=Stopped;1=Running;2=Status 2;3=Status 3;4=Status 4;5=Status 5`. Raw and resolved values are stored. |
-| QR Code Value | `D2050` | Read | `AsciiString`, length `10` D registers | Verify length and encoding. |
+<!-- //code change by chatgpt -->
+<!-- | QR Code Value | `D2050` | Read | `AsciiString`, length `10` D registers | Verify length and encoding. | -->
 | Part Number | `D2060` | Read | `AsciiString`, length `10` D registers | A new valid non-zero Part Number is checked against SQLite and kept pending until D1075 is HIGH. Verify length and encoding; validation prevents overlap with every other enabled range. |
 | Serial Number | `D2000` | Read | Unconfigured | Disabled by default with only the start address supplied. Set the real datatype, register count/range, byte order, and encoding in PLC Mapping before enabling it. Its decoded value is stored in the immediate snapshot. |
 | Part Data Ready | `D1075` | Read only | `UInt16` | PLC-controlled trigger with editable `0=LOW;1=HIGH` mapping. Every HIGH poll evaluates the current Part Number; LOW is not required between different Part Numbers, and the PC never writes this mapping. |
@@ -55,7 +56,9 @@ The implementation exposes editable address, address type, datatype, register co
 * Running Status numeric values beyond the editable placeholder defaults.
 * Date and Time encoding and register count.
 * Leak Test Value datatype/register count and decimal parsing.
-* QR Code and Part Number register lengths and encoding.
+<!-- //code change by chatgpt -->
+<!-- * QR Code and Part Number register lengths and encoding. -->
+* Part Number register length and encoding.
 * Serial Number datatype, register count/range, byte order, encoding, and resolution of the existing Target Parts Per Shift overlap. Its default start address is `D2000`.
 * Live confirmation of the configured OFF/ON representations and addresses for PC writes.
 * Live confirmation of `D1075 = 1` saving one valid Part Number immediately, no duplicate across held-HIGH polls, and a changed Part Number saving once without D1075 returning LOW.
