@@ -1607,11 +1607,11 @@ await RunAsync("production acquisition saves new Part Numbers once while D1075 r
         "configured DATA SAVED mapping D2122 did not receive ON");
 
     await WaitUntilAsync(
-        () => server.ObservedWriteValues.Any(write =>
+        () => server.ObservedWriteValues.Count(write =>
             write.Start == 2122 &&
-            write.Value == 1),
+            write.Value == 1) == 2,
         TimeSpan.FromSeconds(5),
-        "configured DATA SAVED mapping D2122 did not return OFF");
+        "configured DATA SAVED mapping D2122 did not return OFF after the pulse");
 
     AssertEqual(
         (ushort)1,
@@ -1623,8 +1623,10 @@ await RunAsync("production acquisition saves new Part Numbers once while D1075 r
             write.Start == 2122 &&
             write.Value == 0));
 
+    // One OFF write is the connection/session safety initialization.
+    // The second OFF write completes the PART001 acknowledgement pulse.
     AssertEqual(
-        1,
+        2,
         server.ObservedWriteValues.Count(write =>
             write.Start == 2122 &&
             write.Value == 1));
@@ -1662,7 +1664,7 @@ await RunAsync("production acquisition saves new Part Numbers once while D1075 r
     await WaitUntilAsync(
         () => server.ObservedWriteValues.Count(write =>
             write.Start == 2122 &&
-            write.Value == 1) == 2,
+            write.Value == 1) == 3,
         TimeSpan.FromSeconds(5),
         "PART002 DATA SAVED did not return OFF");
     AssertEqual("0.111", await File.ReadAllTextAsync(liveLeakValuePath));
