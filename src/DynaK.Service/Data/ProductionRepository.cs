@@ -83,13 +83,26 @@ public sealed class ProductionRepository
         return await reader.ReadAsync(cancellationToken) ? MapRecord(reader) : null;
     }
 
-    public async Task<bool> ExistsByPartNumberAsync(string stationId, string partNumber, CancellationToken cancellationToken)
+    public async Task<bool> ExistsBySerialNumberAsync(string stationId, string serialNumber, CancellationToken cancellationToken)
     {
+        var normalized = NormalizeSerialNumber(serialNumber);
+        if (normalized.Length == 0)
+        {
+            return false;
+        }
+
         await using var connection = await _database.OpenConnectionAsync(cancellationToken);
         await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT EXISTS(SELECT 1 FROM production_records WHERE station_id = $station_id AND part_number = $part_number);";
+        command.CommandText = """
+            SELECT EXISTS(
+                SELECT 1
+                FROM logical_parts
+                WHERE station_id = $station_id
+                  AND serial_number = $serial_number
+            );
+            """;
         command.Parameters.AddWithValue("$station_id", stationId);
-        command.Parameters.AddWithValue("$part_number", partNumber);
+        command.Parameters.AddWithValue("$serial_number", normalized);
         return Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken), CultureInfo.InvariantCulture) == 1;
     }
 
@@ -134,16 +147,16 @@ public sealed class ProductionRepository
             command.Parameters.AddWithValue("$shift", query.Shift.Trim());
         }
 
-        if (!string.IsNullOrWhiteSpace(query.PartNumber))
+        if (!string.IsNullOrWhiteSpace(query.SerialNumber))
         {
-            where.Add("part_number LIKE $part_number");
-            command.Parameters.AddWithValue("$part_number", $"%{query.PartNumber.Trim()}%");
+            where.Add("serial_number LIKE $serial_number");
+            command.Parameters.AddWithValue("$serial_number", $"%{query.SerialNumber.Trim()}%");
         }
 
-        if (!string.IsNullOrWhiteSpace(query.QrCode))
+        if (!string.IsNullOrWhiteSpace(query.ModelNumber))
         {
-            where.Add("qr_code LIKE $qr_code");
-            command.Parameters.AddWithValue("$qr_code", $"%{query.QrCode.Trim()}%");
+            where.Add("part_number LIKE $model_number");
+            command.Parameters.AddWithValue("$model_number", $"%{query.ModelNumber.Trim()}%");
         }
 
         if (query.Result is not null)
@@ -237,16 +250,16 @@ public sealed class ProductionRepository
             command.Parameters.AddWithValue("$shift", query.Shift.Trim());
         }
 
-        if (!string.IsNullOrWhiteSpace(query.PartNumber))
+        if (!string.IsNullOrWhiteSpace(query.SerialNumber))
         {
-            filters.Add("attempt.part_number LIKE $part_number");
-            command.Parameters.AddWithValue("$part_number", $"%{query.PartNumber.Trim()}%");
+            logicalFilters.Add("logical.serial_number LIKE $serial_number");
+            command.Parameters.AddWithValue("$serial_number", $"%{query.SerialNumber.Trim()}%");
         }
 
-        if (!string.IsNullOrWhiteSpace(query.QrCode))
+        if (!string.IsNullOrWhiteSpace(query.ModelNumber))
         {
-            logicalFilters.Add("logical.qr_code LIKE $qr_code");
-            command.Parameters.AddWithValue("$qr_code", $"%{query.QrCode.Trim()}%");
+            filters.Add("attempt.part_number LIKE $model_number");
+            command.Parameters.AddWithValue("$model_number", $"%{query.ModelNumber.Trim()}%");
         }
 
         AddLogicalResultFilter(logicalFilters, command, query.Result);
@@ -255,8 +268,8 @@ public sealed class ProductionRepository
             SELECT
                 logical.id AS logical_id,
                 logical.station_id AS logical_station_id,
-                logical.qr_code AS logical_qr_code,
-                logical.part_number AS logical_part_number,
+                logical.serial_number AS logical_serial_number,
+                logical.part_number AS logical_model_number,
                 logical.overall_result,
                 logical.created_timestamp AS logical_created_timestamp,
                 logical.updated_timestamp AS logical_updated_timestamp,
@@ -294,8 +307,8 @@ public sealed class ProductionRepository
                 SELECT
                     logical.id AS logical_id,
                     logical.station_id AS logical_station_id,
-                    logical.qr_code AS logical_qr_code,
-                    logical.part_number AS logical_part_number,
+                    logical.serial_number AS logical_serial_number,
+                    logical.part_number AS logical_model_number,
                     logical.overall_result,
                     logical.created_timestamp AS logical_created_timestamp,
                     logical.updated_timestamp AS logical_updated_timestamp,
@@ -410,9 +423,9 @@ public sealed class ProductionRepository
     {
         command.Parameters.AddWithValue("$station_id", record.StationId);
         command.Parameters.AddWithValue("$plc_sequence_id", record.PlcSequenceId);
-        command.Parameters.AddWithValue("$serial_number", (object?)record.SerialNumber ?? DBNull.Value);
-        command.Parameters.AddWithValue("$qr_code", record.QrCode);
-        command.Parameters.AddWithValue("$part_number", record.PartNumber);
+        command.Parameters.AddWithValue("$serial_number", record.SerialNumber);
+        command.Parameters.AddWithValue("$qr_code", "");
+        command.Parameters.AddWithValue("$part_number", record.ModelNumber);
         command.Parameters.AddWithValue("$date", record.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
         command.Parameters.AddWithValue("$time", record.Time.ToString("HH:mm:ss", CultureInfo.InvariantCulture));
         command.Parameters.AddWithValue("$timestamp", FormatTimestamp(record.Timestamp));
@@ -447,8 +460,7 @@ public sealed class ProductionRepository
             reader.GetInt64(reader.GetOrdinal("id")),
             reader.GetString(reader.GetOrdinal("station_id")),
             reader.GetInt64(reader.GetOrdinal("plc_sequence_id")),
-            ReadNullableString(reader, "serial_number"),
-            reader.GetString(reader.GetOrdinal("qr_code")),
+            ReadNullableString(reader, "serial_number")?.Trim() ?? "",
             reader.GetString(reader.GetOrdinal("part_number")),
             DateOnly.ParseExact(reader.GetString(reader.GetOrdinal("date")), "yyyy-MM-dd", CultureInfo.InvariantCulture),
             TimeOnly.ParseExact(reader.GetString(reader.GetOrdinal("time")), "HH:mm:ss", CultureInfo.InvariantCulture),
@@ -482,8 +494,8 @@ public sealed class ProductionRepository
         return new LogicalPart(
             reader.GetInt64(reader.GetOrdinal("logical_id")),
             reader.GetString(reader.GetOrdinal("logical_station_id")),
-            reader.GetString(reader.GetOrdinal("logical_qr_code")),
-            reader.GetString(reader.GetOrdinal("logical_part_number")),
+            ReadNullableString(reader, "logical_serial_number"),
+            reader.GetString(reader.GetOrdinal("logical_model_number")),
             reader.GetString(reader.GetOrdinal("overall_result")),
             DateTimeOffset.Parse(reader.GetString(reader.GetOrdinal("logical_created_timestamp")), CultureInfo.InvariantCulture),
             DateTimeOffset.Parse(reader.GetString(reader.GetOrdinal("logical_updated_timestamp")), CultureInfo.InvariantCulture),
@@ -505,13 +517,11 @@ public sealed class ProductionRepository
                 FROM logical_parts AS logical
                 LEFT JOIN production_records AS attempt ON attempt.logical_part_id = logical.id
                 WHERE logical.station_id = $station_id
-                  AND logical.qr_code = $qr_code
-                  AND logical.part_number = $part_number
+                  AND logical.serial_number = $serial_number
                 GROUP BY logical.id, logical.overall_result;
                 """;
             query.Parameters.AddWithValue("$station_id", record.StationId);
-            query.Parameters.AddWithValue("$qr_code", record.QrCode);
-            query.Parameters.AddWithValue("$part_number", record.PartNumber);
+            query.Parameters.AddWithValue("$serial_number", record.SerialNumber);
             await using var reader = await query.ExecuteReaderAsync(cancellationToken);
             if (await reader.ReadAsync(cancellationToken))
             {
@@ -523,14 +533,14 @@ public sealed class ProductionRepository
         insert.Transaction = transaction;
         insert.CommandText = """
             INSERT INTO logical_parts (
-                station_id, qr_code, part_number, overall_result, latest_attempt_id,
+                station_id, serial_number, qr_code, part_number, overall_result, latest_attempt_id,
                 created_timestamp, updated_timestamp
             )
-            VALUES ($station_id, $qr_code, $part_number, $overall_result, NULL, $created_timestamp, $updated_timestamp);
+            VALUES ($station_id, $serial_number, '', $model_number, $overall_result, NULL, $created_timestamp, $updated_timestamp);
             """;
         insert.Parameters.AddWithValue("$station_id", record.StationId);
-        insert.Parameters.AddWithValue("$qr_code", record.QrCode);
-        insert.Parameters.AddWithValue("$part_number", record.PartNumber);
+        insert.Parameters.AddWithValue("$serial_number", record.SerialNumber);
+        insert.Parameters.AddWithValue("$model_number", record.ModelNumber);
         insert.Parameters.AddWithValue("$overall_result", IsNg(record.Result) ? "NG-REWORK" : record.Result);
         insert.Parameters.AddWithValue("$created_timestamp", FormatTimestamp(record.CreatedTimestamp));
         insert.Parameters.AddWithValue("$updated_timestamp", FormatTimestamp(record.Timestamp));
@@ -550,15 +560,16 @@ public sealed class ProductionRepository
         command.Transaction = transaction;
         command.CommandText = """
             UPDATE logical_parts
-            SET qr_code = $qr_code,
-                part_number = $part_number,
+            SET serial_number = $serial_number,
+                qr_code = '',
+                part_number = $model_number,
                 overall_result = $overall_result,
                 latest_attempt_id = $latest_attempt_id,
                 updated_timestamp = $updated_timestamp
             WHERE id = $id;
             """;
-        command.Parameters.AddWithValue("$qr_code", record.QrCode);
-        command.Parameters.AddWithValue("$part_number", record.PartNumber);
+        command.Parameters.AddWithValue("$serial_number", record.SerialNumber);
+        command.Parameters.AddWithValue("$model_number", record.ModelNumber);
         command.Parameters.AddWithValue("$overall_result", logicalPart.AttemptCount > 0 || IsNg(record.Result) || IsNg(logicalPart.OverallResult)
             ? "NG-REWORK"
             : record.Result);
@@ -642,6 +653,8 @@ public sealed class ProductionRepository
         var ordinal = reader.GetOrdinal(name);
         return reader.IsDBNull(ordinal) ? null : reader.GetString(ordinal);
     }
+
+    private static string NormalizeSerialNumber(string? value) => (value ?? "").Trim();
 
     private static string FormatDecimal(decimal value) => value.ToString("0.###", CultureInfo.InvariantCulture);
 
