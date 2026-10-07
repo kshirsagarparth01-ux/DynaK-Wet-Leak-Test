@@ -137,6 +137,7 @@ public sealed class SqliteDatabase
 
             CREATE INDEX IF NOT EXISTS ix_production_records_timestamp ON production_records(timestamp);
             CREATE INDEX IF NOT EXISTS ix_production_records_qr_code ON production_records(qr_code);
+            CREATE INDEX IF NOT EXISTS ix_production_records_serial_number ON production_records(station_id, serial_number);
             CREATE INDEX IF NOT EXISTS ix_production_records_part_number ON production_records(part_number);
             CREATE INDEX IF NOT EXISTS ix_production_records_shift ON production_records(shift);
             CREATE INDEX IF NOT EXISTS ix_production_records_result ON production_records(result);
@@ -167,7 +168,9 @@ public sealed class SqliteDatabase
             VALUES (6, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
             INSERT OR IGNORE INTO schema_migrations (version, applied_timestamp)
             VALUES (7, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
-            PRAGMA user_version = 7;
+            INSERT OR IGNORE INTO schema_migrations (version, applied_timestamp)
+            VALUES (8, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+            PRAGMA user_version = 8;
             """, cancellationToken);
 
         _logger.LogInformation("SQLite database initialized at {Path}", databasePath);
@@ -515,60 +518,102 @@ public sealed class SqliteDatabase
         string databasePath,
         CancellationToken cancellationToken)
     {
+        var columns = await GetColumnsAsync(connection, "logical_parts", cancellationToken);
         var createSql = await GetCreateSqlAsync(connection, "logical_parts", cancellationToken);
-        if (createSql.Contains("UNIQUE (station_id, qr_code, part_number)", StringComparison.OrdinalIgnoreCase))
+        var requiresRebuild = !columns.Contains("serial_number") ||
+            createSql.Contains("UNIQUE (station_id, qr_code, part_number)", StringComparison.OrdinalIgnoreCase);
+
+        if (requiresRebuild)
         {
-            return;
+            var backupPath = $"{databasePath}.pre-v8-serial-identity-{DateTime.UtcNow:yyyyMMddHHmmss}.bak";
+            await using (var backup = new SqliteConnection(new SqliteConnectionStringBuilder
+            {
+                DataSource = backupPath,
+                Mode = SqliteOpenMode.ReadWriteCreate,
+                Pooling = false
+            }.ToString()))
+            {
+                await backup.OpenAsync(cancellationToken);
+                connection.BackupDatabase(backup);
+            }
+
+            _logger.LogInformation("Created pre-serial-identity SQLite backup at {BackupPath}", backupPath);
+
+            var legacyHasSerial = columns.Contains("serial_number");
+            var serialProjection = legacyHasSerial ? "serial_number" : "NULL";
+
+            await ExecuteAsync(connection, $"""
+                PRAGMA foreign_keys=OFF;
+                BEGIN TRANSACTION;
+
+                ALTER TABLE logical_parts RENAME TO logical_parts_legacy;
+
+                CREATE TABLE logical_parts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    station_id TEXT NOT NULL,
+                    serial_number TEXT NULL,
+                    qr_code TEXT NOT NULL DEFAULT '',
+                    part_number TEXT NOT NULL,
+                    overall_result TEXT NOT NULL,
+                    latest_attempt_id INTEGER NULL,
+                    created_timestamp TEXT NOT NULL,
+                    updated_timestamp TEXT NOT NULL
+                );
+
+                INSERT INTO logical_parts (
+                    id, station_id, serial_number, qr_code, part_number, overall_result, latest_attempt_id,
+                    created_timestamp, updated_timestamp
+                )
+                SELECT
+                    id, station_id, {serialProjection}, qr_code, part_number, overall_result, latest_attempt_id,
+                    created_timestamp, updated_timestamp
+                FROM logical_parts_legacy;
+
+                DROP TABLE logical_parts_legacy;
+
+                COMMIT;
+                PRAGMA foreign_keys=ON;
+                """, cancellationToken);
         }
 
-        var backupPath = $"{databasePath}.pre-v5-{DateTime.UtcNow:yyyyMMddHHmmss}.bak";
-        await using (var backup = new SqliteConnection(new SqliteConnectionStringBuilder
-        {
-            DataSource = backupPath,
-            Mode = SqliteOpenMode.ReadWriteCreate,
-            Pooling = false
-        }.ToString()))
-        {
-            await backup.OpenAsync(cancellationToken);
-            connection.BackupDatabase(backup);
-        }
-
-        _logger.LogInformation("Created pre-migration SQLite backup at {BackupPath}", backupPath);
+        // Backfill only when all nonblank attempts under one logical part agree on one serial.
+        // This preserves legacy rows without guessing identity.
         await ExecuteAsync(connection, """
-            PRAGMA foreign_keys=OFF;
-            BEGIN TRANSACTION;
-
-            ALTER TABLE logical_parts RENAME TO logical_parts_legacy;
-
-            CREATE TABLE logical_parts (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                station_id TEXT NOT NULL,
-                qr_code TEXT NOT NULL,
-                part_number TEXT NOT NULL,
-                overall_result TEXT NOT NULL,
-                latest_attempt_id INTEGER NULL,
-                created_timestamp TEXT NOT NULL,
-                updated_timestamp TEXT NOT NULL,
-                UNIQUE (station_id, qr_code, part_number)
-            );
-
-            INSERT INTO logical_parts (
-                id, station_id, qr_code, part_number, overall_result, latest_attempt_id,
-                created_timestamp, updated_timestamp
+            UPDATE logical_parts
+            SET serial_number = (
+                SELECT MIN(trim(attempt.serial_number))
+                FROM production_records AS attempt
+                WHERE attempt.logical_part_id = logical_parts.id
+                  AND trim(COALESCE(attempt.serial_number, '')) <> ''
+                HAVING COUNT(DISTINCT trim(attempt.serial_number)) = 1
             )
-            SELECT
-                id, station_id, qr_code, part_number, overall_result, latest_attempt_id,
-                created_timestamp, updated_timestamp
-            FROM logical_parts_legacy;
+            WHERE trim(COALESCE(serial_number, '')) = '';
 
-            DROP TABLE logical_parts_legacy;
+            -- If legacy data assigned the same serial to more than one logical part,
+            -- keep every historical part and leave the conflicting identity unresolved.
+            UPDATE logical_parts AS current
+            SET serial_number = NULL
+            WHERE trim(COALESCE(current.serial_number, '')) <> ''
+              AND EXISTS (
+                  SELECT 1
+                  FROM logical_parts AS other
+                  WHERE other.id <> current.id
+                    AND other.station_id = current.station_id
+                    AND other.serial_number = current.serial_number
+              );
 
-            CREATE INDEX ix_logical_parts_updated ON logical_parts(updated_timestamp DESC, id DESC);
-            CREATE INDEX ix_logical_parts_part_number ON logical_parts(part_number);
-            CREATE INDEX ix_logical_parts_result ON logical_parts(overall_result);
+            CREATE UNIQUE INDEX IF NOT EXISTS ux_logical_parts_station_serial
+                ON logical_parts(station_id, serial_number)
+                WHERE serial_number IS NOT NULL AND trim(serial_number) <> '';
 
-            COMMIT;
-            PRAGMA foreign_keys=ON;
+            CREATE INDEX IF NOT EXISTS ix_logical_parts_serial_number
+                ON logical_parts(serial_number);
+            CREATE INDEX IF NOT EXISTS ix_logical_parts_updated
+                ON logical_parts(updated_timestamp DESC, id DESC);
+            CREATE INDEX IF NOT EXISTS ix_logical_parts_part_number
+                ON logical_parts(part_number);
+            CREATE INDEX IF NOT EXISTS ix_logical_parts_result
+                ON logical_parts(overall_result);
             """, cancellationToken);
     }
 
