@@ -229,11 +229,22 @@ public sealed class PartDataReadyService
 
             var snapshotValues = JsonSerializer.Serialize(snapshot.Signals, SnapshotJsonOptions);
             _logger.LogInformation("Snapshot: {SnapshotValues}", snapshotValues);
+            //code change by chatgpt
+            // _logger.LogInformation(
+            //     "Snapshot captured for Part {PartNumber}: Serial={SerialNumber}, QR={QrCode}, Leak={LeakValue} {LeakUnit}, Result={Result}, Mode={Mode}, Error={Error}, ConfiguredSignals={SignalCount}.",
+            //     snapshotPartNumber,
+            //     snapshot.SerialNumber ?? "<empty>",
+            //     snapshot.QrCode,
+            //     snapshot.LeakTestValue,
+            //     snapshot.LeakTestUnit,
+            //     snapshot.ResolvedResult,
+            //     snapshot.ResolvedMode,
+            //     snapshot.ErrorDescription,
+            //     snapshot.Signals.Count);
             _logger.LogInformation(
-                "Snapshot captured for Part {PartNumber}: Serial={SerialNumber}, QR={QrCode}, Leak={LeakValue} {LeakUnit}, Result={Result}, Mode={Mode}, Error={Error}, ConfiguredSignals={SignalCount}.",
+                "Snapshot captured for Part {PartNumber}: Serial={SerialNumber}, Leak={LeakValue} {LeakUnit}, Result={Result}, Mode={Mode}, Error={Error}, ConfiguredSignals={SignalCount}.",
                 snapshotPartNumber,
                 snapshot.SerialNumber ?? "<empty>",
-                snapshot.QrCode,
                 snapshot.LeakTestValue,
                 snapshot.LeakTestUnit,
                 snapshot.ResolvedResult,
@@ -298,7 +309,8 @@ public sealed class PartDataReadyService
             settings.StationId,
             sequenceId,
             string.IsNullOrWhiteSpace(snapshot.SerialNumber) ? null : snapshot.SerialNumber.Trim(),
-            snapshot.QrCode.Trim(),
+            //code change by chatgpt
+            // snapshot.QrCode.Trim(),
             snapshot.PartNumber.Trim(),
             DateOnly.FromDateTime(snapshot.Timestamp.DateTime),
             TimeOnly.FromDateTime(snapshot.Timestamp.DateTime),
