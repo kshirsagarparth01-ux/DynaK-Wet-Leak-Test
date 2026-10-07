@@ -1383,7 +1383,10 @@ await RunAsync("production acquisition saves new Part Numbers once while D1075 r
     AssertEqual((ushort)0, server.Registers[2121]);
 
     await WaitUntilAsync(() => records.CountAsync(CancellationToken.None).GetAwaiter().GetResult() == 1, TimeSpan.FromSeconds(5), "PART001 was not saved immediately from the first D1075=1 poll");
-    await WaitUntilAsync(() => server.Registers.TryGetValue(2122, out var dataSaved) && dataSaved == 0, TimeSpan.FromSeconds(5), "configured DATA SAVED did not pulse ON after the complete database and text-file writes");
+    await WaitUntilAsync(
+        () => server.ObservedWriteValues.Any(write => write.Start == 2122 && write.Value == 0),
+        TimeSpan.FromSeconds(5),
+        "configured DATA SAVED did not pulse ON after the complete database and text-file writes");
     AssertEqual(1, await records.CountLogicalPartsAsync(CancellationToken.None));
     AssertEqual("0.327", await File.ReadAllTextAsync(liveLeakValuePath));
     var part1 = (await records.QueryAsync(new ProductionRecordQuery(null, null, null, "PART001", null, null), CancellationToken.None)).Single();
