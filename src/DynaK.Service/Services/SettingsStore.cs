@@ -15,6 +15,8 @@ public sealed class SettingsStore
         "Result Ready",
         "PLC Sequence / Cycle ID",
         "QR Code",
+        //code change by chatgpt
+        "QR Code Value",
         "Leak Lower Limit",
         "Leak Upper Limit",
         PlcSignalMapping.CombinedResultSignalName,
