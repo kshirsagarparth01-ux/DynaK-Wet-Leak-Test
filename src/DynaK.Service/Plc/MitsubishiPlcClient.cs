@@ -201,9 +201,8 @@ public class MitsubishiModbusPlcClient : IPlcClient
 
     private PartDataSnapshot? BuildPartDataSnapshot(IReadOnlyDictionary<string, PlcSignalValue> signals)
     {
-        var qrCode = ReadSignalText(signals, "QR Code Value");
-        var partNumber = ReadSignalText(signals, "Part Number");
-        var serialNumber = ReadSignalText(signals, "Serial Number");
+        var modelNumber = ReadSignalText(signals, PlcSignalMapping.ModelNumberSignalName);
+        var serialNumber = ReadSignalText(signals, PlcSignalMapping.SerialNumberSignalName);
 
         DateTimeOffset timestamp;
         try
@@ -236,9 +235,8 @@ public class MitsubishiModbusPlcClient : IPlcClient
 
         return new PartDataSnapshot(
             configuration.StationId,
-            string.IsNullOrWhiteSpace(serialNumber) ? null : serialNumber,
-            qrCode,
-            partNumber,
+            string.IsNullOrWhiteSpace(serialNumber) ? null : serialNumber.Trim(),
+            modelNumber,
             targetPartsPerShift,
             actualPartCount,
             leakValue,
