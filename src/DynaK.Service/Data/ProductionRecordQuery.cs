@@ -7,6 +7,7 @@ public sealed record ProductionRecordQuery(
     DateTimeOffset? To,
     string? Shift,
     string? PartNumber,
-    string? QrCode,
+    //code change by chatgpt
+    // string? QrCode,
     ProductionResult? Result,
     int Limit = 200);
