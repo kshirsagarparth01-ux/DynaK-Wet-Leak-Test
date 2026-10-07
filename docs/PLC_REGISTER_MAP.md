@@ -40,7 +40,7 @@ Prompt 4 supplies the Mitsubishi PLC connection endpoint and D-device register l
 | --- | --- | --- | --- | --- |
 | System Ready | `D2100` | Write | `UInt16` | Set high once the app services, database, PLC client, and station runtime are operational; set low on normal shutdown if PLC communication remains available. |
 | Communication OK | `D2105` | Write | `UInt16` | Set high only after successful PLC read communication; set low on repeated read failures when technically possible. |
-| Data Saved | `D2110` | Write | `UInt16` | Write configured ON only after SQLite commit and live-file update; write configured OFF after about one second. |
+| Data Saved | `D2110` | Write | `UInt16` | Write configured ON only after SQLite commit and live-file update; keep it ON for about two seconds, then explicitly write configured OFF. A failed acknowledgement is retried without inserting another History row. |
 
 These addresses are backward-compatible defaults, not safety constants. Each handshake mapping is editable. The write allow-list contains only the three signal names, and runtime writes resolve the current configured address and ON/OFF value map; every other signal is forbidden and logged.
 
