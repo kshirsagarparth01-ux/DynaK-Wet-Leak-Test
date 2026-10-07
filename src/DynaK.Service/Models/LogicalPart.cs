@@ -3,8 +3,8 @@ namespace DynaK.Service.Models;
 public sealed record LogicalPart(
     long Id,
     string StationId,
-    string QrCode,
-    string PartNumber,
+    string? SerialNumber,
+    string ModelNumber,
     string OverallResult,
     DateTimeOffset CreatedTimestamp,
     DateTimeOffset UpdatedTimestamp,
