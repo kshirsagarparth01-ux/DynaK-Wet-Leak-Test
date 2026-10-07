@@ -137,7 +137,6 @@ public sealed class SqliteDatabase
 
             CREATE INDEX IF NOT EXISTS ix_production_records_timestamp ON production_records(timestamp);
             CREATE INDEX IF NOT EXISTS ix_production_records_qr_code ON production_records(qr_code);
-            CREATE INDEX IF NOT EXISTS ix_production_records_serial_number ON production_records(station_id, serial_number);
             CREATE INDEX IF NOT EXISTS ix_production_records_part_number ON production_records(part_number);
             CREATE INDEX IF NOT EXISTS ix_production_records_shift ON production_records(shift);
             CREATE INDEX IF NOT EXISTS ix_production_records_result ON production_records(result);
@@ -311,6 +310,7 @@ public sealed class SqliteDatabase
         return ExecuteAsync(connection, """
             CREATE INDEX IF NOT EXISTS ix_production_records_timestamp ON production_records(timestamp);
             CREATE INDEX IF NOT EXISTS ix_production_records_qr_code ON production_records(qr_code);
+            CREATE INDEX IF NOT EXISTS ix_production_records_serial_number ON production_records(station_id, serial_number);
             CREATE INDEX IF NOT EXISTS ix_production_records_part_number ON production_records(part_number);
             CREATE INDEX IF NOT EXISTS ix_production_records_shift ON production_records(shift);
             CREATE INDEX IF NOT EXISTS ix_production_records_result ON production_records(result);
