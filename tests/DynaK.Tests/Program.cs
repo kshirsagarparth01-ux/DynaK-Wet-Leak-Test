@@ -1423,9 +1423,19 @@ await RunAsync("production acquisition saves new Part Numbers once while D1075 r
     AssertEqual("QR002", savedParts.Single(record => record.PartNumber == "PART002").QrCode);
     AssertTrue(!server.ObservedWriteValues.Any(write => write.Start == 1075), "D1075 must remain read-only across all pulses");
 
+    var dataSavedPulsesBeforeReconnect = server.ObservedWriteValues.Count(write => write.Start == 2122 && write.Value == 0);
     server.DropConnection();
     await WaitUntilAsync(() => StateSnapshot(acquisition, store.Current).RuntimeStatus == StationRuntimeStatus.ConnectionError, TimeSpan.FromSeconds(5), "station did not mark connection error");
     await WaitUntilAsync(() => StateSnapshot(acquisition, store.Current).RuntimeStatus == StationRuntimeStatus.Running, TimeSpan.FromSeconds(5), "station did not reconnect");
+    await WaitUntilAsync(
+        () => server.ObservedWriteValues.Count(write => write.Start == 2122 && write.Value == 0) > dataSavedPulsesBeforeReconnect,
+        TimeSpan.FromSeconds(10),
+        "pending PART002 DATA SAVED acknowledgement was not retried after reconnect");
+    await WaitUntilAsync(
+        () => server.Registers.TryGetValue(2122, out var dataSaved) && dataSaved == 1,
+        TimeSpan.FromSeconds(5),
+        "retried PART002 DATA SAVED acknowledgement did not return OFF");
+    AssertEqual(2, await records.CountAsync(CancellationToken.None));
 
     await using (var connection = await database.OpenConnectionAsync(CancellationToken.None))
     {
