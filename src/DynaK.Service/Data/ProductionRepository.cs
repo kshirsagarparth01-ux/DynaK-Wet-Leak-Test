@@ -21,6 +21,7 @@ public sealed class ProductionRepository
         var logicalPart = await GetOrCreateLogicalPartAsync(connection, (SqliteTransaction)transaction, record, cancellationToken);
         await using var command = connection.CreateCommand();
         command.Transaction = (SqliteTransaction)transaction;
+        //code change by chatgpt
         command.CommandText = """
             INSERT INTO production_records (
                 logical_part_id, attempt_kind, station_id, plc_sequence_id, serial_number, qr_code, part_number, date, time, timestamp, shift,
@@ -31,7 +32,8 @@ public sealed class ProductionRepository
                 plc_snapshot_json, created_timestamp
             )
             VALUES (
-                $logical_part_id, $attempt_kind, $station_id, $plc_sequence_id, $serial_number, $qr_code, $part_number, $date, $time, $timestamp, $shift,
+                -- $logical_part_id, $attempt_kind, $station_id, $plc_sequence_id, $serial_number, $qr_code, $part_number, $date, $time, $timestamp, $shift,
+                $logical_part_id, $attempt_kind, $station_id, $plc_sequence_id, $serial_number, '', $part_number, $date, $time, $timestamp, $shift,
                 $target_parts_per_shift, $actual_part_count, $ok_count, $ng_count, $rework_count,
                 $leak_test_value, $leak_test_unit, $lower_limit, $upper_limit, $result, $raw_result_value,
                 $resolved_result, $auto_manual_mode, $raw_mode_value, $resolved_mode, $machine_running,
@@ -140,11 +142,12 @@ public sealed class ProductionRepository
             command.Parameters.AddWithValue("$part_number", $"%{query.PartNumber.Trim()}%");
         }
 
-        if (!string.IsNullOrWhiteSpace(query.QrCode))
-        {
-            where.Add("qr_code LIKE $qr_code");
-            command.Parameters.AddWithValue("$qr_code", $"%{query.QrCode.Trim()}%");
-        }
+        //code change by chatgpt
+        // if (!string.IsNullOrWhiteSpace(query.QrCode))
+        // {
+        //     where.Add("qr_code LIKE $qr_code");
+        //     command.Parameters.AddWithValue("$qr_code", $"%{query.QrCode.Trim()}%");
+        // }
 
         if (query.Result is not null)
         {
@@ -243,11 +246,12 @@ public sealed class ProductionRepository
             command.Parameters.AddWithValue("$part_number", $"%{query.PartNumber.Trim()}%");
         }
 
-        if (!string.IsNullOrWhiteSpace(query.QrCode))
-        {
-            logicalFilters.Add("logical.qr_code LIKE $qr_code");
-            command.Parameters.AddWithValue("$qr_code", $"%{query.QrCode.Trim()}%");
-        }
+        //code change by chatgpt
+        // if (!string.IsNullOrWhiteSpace(query.QrCode))
+        // {
+        //     logicalFilters.Add("logical.qr_code LIKE $qr_code");
+        //     command.Parameters.AddWithValue("$qr_code", $"%{query.QrCode.Trim()}%");
+        // }
 
         AddLogicalResultFilter(logicalFilters, command, query.Result);
         logicalFilters.Add($"EXISTS (SELECT 1 FROM production_records AS attempt WHERE {string.Join(" AND ", filters)})");
@@ -255,7 +259,8 @@ public sealed class ProductionRepository
             SELECT
                 logical.id AS logical_id,
                 logical.station_id AS logical_station_id,
-                logical.qr_code AS logical_qr_code,
+                --code change by chatgpt
+                -- logical.qr_code AS logical_qr_code,
                 logical.part_number AS logical_part_number,
                 logical.overall_result,
                 logical.created_timestamp AS logical_created_timestamp,
@@ -294,7 +299,8 @@ public sealed class ProductionRepository
                 SELECT
                     logical.id AS logical_id,
                     logical.station_id AS logical_station_id,
-                    logical.qr_code AS logical_qr_code,
+                    --code change by chatgpt
+                    -- logical.qr_code AS logical_qr_code,
                     logical.part_number AS logical_part_number,
                     logical.overall_result,
                     logical.created_timestamp AS logical_created_timestamp,
@@ -411,7 +417,8 @@ public sealed class ProductionRepository
         command.Parameters.AddWithValue("$station_id", record.StationId);
         command.Parameters.AddWithValue("$plc_sequence_id", record.PlcSequenceId);
         command.Parameters.AddWithValue("$serial_number", (object?)record.SerialNumber ?? DBNull.Value);
-        command.Parameters.AddWithValue("$qr_code", record.QrCode);
+        //code change by chatgpt
+        // command.Parameters.AddWithValue("$qr_code", record.QrCode);
         command.Parameters.AddWithValue("$part_number", record.PartNumber);
         command.Parameters.AddWithValue("$date", record.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
         command.Parameters.AddWithValue("$time", record.Time.ToString("HH:mm:ss", CultureInfo.InvariantCulture));
@@ -448,7 +455,8 @@ public sealed class ProductionRepository
             reader.GetString(reader.GetOrdinal("station_id")),
             reader.GetInt64(reader.GetOrdinal("plc_sequence_id")),
             ReadNullableString(reader, "serial_number"),
-            reader.GetString(reader.GetOrdinal("qr_code")),
+            //code change by chatgpt
+            // reader.GetString(reader.GetOrdinal("qr_code")),
             reader.GetString(reader.GetOrdinal("part_number")),
             DateOnly.ParseExact(reader.GetString(reader.GetOrdinal("date")), "yyyy-MM-dd", CultureInfo.InvariantCulture),
             TimeOnly.ParseExact(reader.GetString(reader.GetOrdinal("time")), "HH:mm:ss", CultureInfo.InvariantCulture),
@@ -482,7 +490,8 @@ public sealed class ProductionRepository
         return new LogicalPart(
             reader.GetInt64(reader.GetOrdinal("logical_id")),
             reader.GetString(reader.GetOrdinal("logical_station_id")),
-            reader.GetString(reader.GetOrdinal("logical_qr_code")),
+            //code change by chatgpt
+            // reader.GetString(reader.GetOrdinal("logical_qr_code")),
             reader.GetString(reader.GetOrdinal("logical_part_number")),
             reader.GetString(reader.GetOrdinal("overall_result")),
             DateTimeOffset.Parse(reader.GetString(reader.GetOrdinal("logical_created_timestamp")), CultureInfo.InvariantCulture),
@@ -505,12 +514,17 @@ public sealed class ProductionRepository
                 FROM logical_parts AS logical
                 LEFT JOIN production_records AS attempt ON attempt.logical_part_id = logical.id
                 WHERE logical.station_id = $station_id
-                  AND logical.qr_code = $qr_code
+                  --code change by chatgpt
+                  -- AND logical.qr_code = $qr_code
                   AND logical.part_number = $part_number
-                GROUP BY logical.id, logical.overall_result;
+                -- GROUP BY logical.id, logical.overall_result;
+                GROUP BY logical.id, logical.overall_result, logical.updated_timestamp
+                ORDER BY logical.updated_timestamp DESC, logical.id DESC
+                LIMIT 1;
                 """;
             query.Parameters.AddWithValue("$station_id", record.StationId);
-            query.Parameters.AddWithValue("$qr_code", record.QrCode);
+            //code change by chatgpt
+            // query.Parameters.AddWithValue("$qr_code", record.QrCode);
             query.Parameters.AddWithValue("$part_number", record.PartNumber);
             await using var reader = await query.ExecuteReaderAsync(cancellationToken);
             if (await reader.ReadAsync(cancellationToken))
@@ -526,10 +540,13 @@ public sealed class ProductionRepository
                 station_id, qr_code, part_number, overall_result, latest_attempt_id,
                 created_timestamp, updated_timestamp
             )
-            VALUES ($station_id, $qr_code, $part_number, $overall_result, NULL, $created_timestamp, $updated_timestamp);
+            //code change by chatgpt
+            -- VALUES ($station_id, $qr_code, $part_number, $overall_result, NULL, $created_timestamp, $updated_timestamp);
+            VALUES ($station_id, '', $part_number, $overall_result, NULL, $created_timestamp, $updated_timestamp);
             """;
         insert.Parameters.AddWithValue("$station_id", record.StationId);
-        insert.Parameters.AddWithValue("$qr_code", record.QrCode);
+        //code change by chatgpt
+        // insert.Parameters.AddWithValue("$qr_code", record.QrCode);
         insert.Parameters.AddWithValue("$part_number", record.PartNumber);
         insert.Parameters.AddWithValue("$overall_result", IsNg(record.Result) ? "NG-REWORK" : record.Result);
         insert.Parameters.AddWithValue("$created_timestamp", FormatTimestamp(record.CreatedTimestamp));
@@ -548,16 +565,18 @@ public sealed class ProductionRepository
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
+        //code change by chatgpt
         command.CommandText = """
             UPDATE logical_parts
-            SET qr_code = $qr_code,
-                part_number = $part_number,
+            -- SET qr_code = $qr_code,
+            SET part_number = $part_number,
                 overall_result = $overall_result,
                 latest_attempt_id = $latest_attempt_id,
                 updated_timestamp = $updated_timestamp
             WHERE id = $id;
             """;
-        command.Parameters.AddWithValue("$qr_code", record.QrCode);
+        //code change by chatgpt
+        // command.Parameters.AddWithValue("$qr_code", record.QrCode);
         command.Parameters.AddWithValue("$part_number", record.PartNumber);
         command.Parameters.AddWithValue("$overall_result", logicalPart.AttemptCount > 0 || IsNg(record.Result) || IsNg(logicalPart.OverallResult)
             ? "NG-REWORK"
