@@ -132,13 +132,13 @@ app.MapGet("/api/records", async (
     string? from,
     string? to,
     string? shift,
-    string? partNumber,
-    string? qrCode,
+    string? serialNumber,
+    string? modelNumber,
     string? result,
     int? limit,
     CancellationToken ct) =>
 {
-    var query = BuildLogicalPartQuery(from, to, shift, partNumber, qrCode, result, limit ?? 200);
+    var query = BuildLogicalPartQuery(from, to, shift, serialNumber, modelNumber, result, limit ?? 200);
     return Results.Ok(await records.QueryLogicalPartsAsync(query, ct));
 });
 
@@ -148,12 +148,12 @@ app.MapGet("/api/records/export/excel", async (
     string? from,
     string? to,
     string? shift,
-    string? partNumber,
-    string? qrCode,
+    string? serialNumber,
+    string? modelNumber,
     string? result,
     CancellationToken ct) =>
 {
-    var query = BuildLogicalPartQuery(from, to, shift, partNumber, qrCode, result, limit: null);
+    var query = BuildLogicalPartQuery(from, to, shift, serialNumber, modelNumber, result, limit: null);
     var parts = await records.QueryLogicalPartsAsync(query, ct);
     var exportedAt = DateTimeOffset.Now;
     var fileName = PartHistoryExcelExporter.CreateFileName(exportedAt);
@@ -262,8 +262,8 @@ static LogicalPartQuery BuildLogicalPartQuery(
     string? from,
     string? to,
     string? shift,
-    string? partNumber,
-    string? qrCode,
+    string? serialNumber,
+    string? modelNumber,
     string? result,
     int? limit)
 {
