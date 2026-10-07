@@ -5,8 +5,7 @@ namespace DynaK.Service.Models;
 public sealed record PartDataSnapshot(
     string StationId,
     string? SerialNumber,
-    string QrCode,
-    string PartNumber,
+    string ModelNumber,
     int? TargetPartsPerShift,
     int? ActualPartCount,
     decimal? LeakTestValue,
