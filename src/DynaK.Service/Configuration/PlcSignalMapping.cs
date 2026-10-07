@@ -22,7 +22,8 @@ public sealed class PlcSignalMapping
         "Auto / Manual",
         "Error",
         "Running Status",
-        "QR Code Value",
+        //code change by chatgpt
+        // "QR Code Value",
         "Part Number",
         PartDataReadySignalName,
         "System Ready",
@@ -42,7 +43,8 @@ public sealed class PlcSignalMapping
         "Auto / Manual",
         "Error",
         "Running Status",
-        "QR Code Value",
+        //code change by chatgpt
+        // "QR Code Value",
         "Part Number",
         PartDataReadySignalName
     ];
@@ -150,7 +152,8 @@ public sealed class PlcSignalMapping
             DRegister("Auto / Manual", "D2030", "UInt16", "Read", "Editable mode mapping. Initial defaults use current known PLC values.", valueMap: "1=Auto;2=Manual"),
             DRegister("Error", "D2035", "UInt16", "Read", "Editable placeholder error-code mapping until real PLC meanings are supplied.", valueMap: "0=No Error;1=Error 1;2=Error 2;3=Error 3;4=Error 4;5=Error 5"),
             DRegister("Running Status", "D2040", "UInt16", "Read", "Editable placeholder running-status mapping until real PLC meanings are supplied.", valueMap: "0=Stopped;1=Running;2=Status 2;3=Status 3;4=Status 4;5=Status 5"),
-            DRegister("QR Code Value", "D2050", "AsciiString", "Read", "Verify register length and encoding; length is D registers.", length: 10, encoding: "ASCII"),
+            //code change by chatgpt
+            // DRegister("QR Code Value", "D2050", "AsciiString", "Read", "Verify register length and encoding; length is D registers.", length: 10, encoding: "ASCII"),
             DRegister("Part Number", "D2060", "AsciiString", "Read", "Verify register length and encoding; length is D registers.", length: 10, encoding: "ASCII"),
             DRegister(PartDataReadySignalName, "D1075", "UInt16", "Read", "PLC-controlled read-only trigger. While HIGH, each valid Part Number is captured and stored once without waiting for a LOW transition.", valueMap: "0=LOW;1=HIGH"),
             new PlcSignalMapping
