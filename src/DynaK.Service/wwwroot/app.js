@@ -87,11 +87,6 @@ $("mappingRows").addEventListener("input", (event) => {
 });
 $("closeDrawer").addEventListener("click", closeDrawer);
 $("drawerOverlay").addEventListener("click", closeDrawer);
-$("currentQr").addEventListener("click", () => {
-  const part = state.parts.find((item) => item.qrCode === $("currentQr").textContent);
-  if (part) openDrawer(part);
-});
-
 window.chrome?.webview?.addEventListener("message", (event) => {
   const message = event.data || {};
   if (message.type === "database-selected" && message.path) {
@@ -258,29 +253,22 @@ function renderStationControl() {
 }
 
 function renderCurrentPart(record, signals, liveResult) {
-  const qrCode = liveSignalText(signals, "QR Code Value");
-  const partNumber = liveSignalText(signals, "Part Number");
+  const serialNumber = liveSignalText(signals, "Serial Number");
+  const modelNumber = liveSignalText(signals, "Model Number");
   const leakValue = liveSignalText(signals, "Leak Test Value");
   const result = liveResult ? String(liveResult).trim() : null;
   const mode = liveSignalText(signals, "Auto / Manual");
   const error = liveSignalText(signals, "Error");
-  const matchingRecord = record && (
-    (qrCode && qrCode === String(record.qrCode || "")) ||
-    (partNumber && partNumber === String(record.partNumber || ""))
-  ) ? record : null;
+  const matchingRecord = record && serialNumber &&
+    serialNumber === String(record.serialNumber || "") ? record : null;
 
-  $("currentSerialNumber").textContent = matchingRecord?.serialNumber || "--";
-  $("currentQr").disabled = !qrCode || !state.parts.some((part) => part.qrCode === qrCode);
-  $("currentQr").textContent = qrCode || "--";
-  $("currentPartNo").textContent = partNumber || "--";
+  $("currentSerialNumber").textContent = serialNumber || matchingRecord?.serialNumber || "--";
+  $("currentModelNo").textContent = modelNumber || matchingRecord?.modelNumber || "--";
   $("currentLeak").textContent = formatLeakTestValue(leakValue);
-  // <!-- Changed using GPT -->
   $("currentLeakUnit").textContent = leakUnit();
-  // $("currentLeakUnit").textContent = matchingRecord?.leakTestUnit || state.config?.leakTestUnit || "--";
   $("currentLeakRange").textContent = matchingRecord
     ? formatLeakRange(matchingRecord.lowerLimit, matchingRecord.upperLimit)
     : formatLeakRange(state.config?.lowerLimit, state.config?.upperLimit);
-  $("currentPlcQr").textContent = qrCode || "--";
   $("currentResult").textContent = result || "--";
   $("currentResult").className = `result-chip ${result ? resultClass(result) : "neutral"}`;
   $("currentMode").textContent = mode || "--";
@@ -297,15 +285,10 @@ function liveSignalText(signals, signalName) {
 
 function clearCurrentPart() {
   $("currentSerialNumber").textContent = "--";
-  $("currentQr").disabled = true;
-  $("currentQr").textContent = "--";
-  $("currentPartNo").textContent = "--";
+  $("currentModelNo").textContent = "--";
   $("currentLeak").textContent = "--";
-  // <!-- Changed using GPT -->
   $("currentLeakUnit").textContent = leakUnit();
-  // $("currentLeakUnit").textContent = state.config?.leakTestUnit || "--";
   $("currentLeakRange").textContent = formatLeakRange(state.config?.lowerLimit, state.config?.upperLimit);
-  $("currentPlcQr").textContent = "--";
   $("currentResult").textContent = "--";
   $("currentResult").className = "result-chip neutral";
   $("currentMode").textContent = "--";
@@ -315,7 +298,7 @@ function clearCurrentPart() {
 function renderRecords(target, parts, includeDate) {
   target.innerHTML = "";
   if (parts.length === 0) {
-    target.innerHTML = `<tr><td colspan="${includeDate ? 11 : 9}">${includeDate ? "No records found" : "No records available"}</td></tr>`;
+    target.innerHTML = `<tr><td colspan="${includeDate ? 10 : 8}">${includeDate ? "No records found" : "No records available"}</td></tr>`;
     return;
   }
 
@@ -344,7 +327,7 @@ function partCells(part, attempt, history) {
   // const leak = attempt.leakTestValue == null ? "--" : `${formatLeakTestValue(attempt.leakTestValue)} ${escapeHtml(attempt.leakTestUnit)}`;
   const leakRange = formatLeakRange(attempt.lowerLimit, attempt.upperLimit);
   const result = logicalResult(part);
-  const common = `<td>${escapeHtml(attempt.serialNumber || "--")}</td><td>${escapeHtml(part.qrCode)}</td><td>${escapeHtml(part.partNumber)}</td><td class="right">${leak}</td><td>${escapeHtml(leakRange)}</td><td><span class="result-chip ${resultClass(result)}">${escapeHtml(result)}</span></td>`;
+  const common = `<td>${escapeHtml(attempt.serialNumber || part.serialNumber || "--")}</td><td>${escapeHtml(part.modelNumber || attempt.modelNumber || "--")}</td><td class="right">${leak}</td><td>${escapeHtml(leakRange)}</td><td><span class="result-chip ${resultClass(result)}">${escapeHtml(result)}</span></td>`;
   return history
     ? `${common}<td>${escapeHtml(attempt.shift)}</td><td>${escapeHtml(modeText(attempt))}</td><td>${escapeHtml(error)}</td>`
     : `${common}<td>${escapeHtml(modeText(attempt))}</td><td>${escapeHtml(error)}</td>`;
@@ -992,8 +975,7 @@ function renderDrawer(part) {
       ["DATE", formatDate(new Date(attempt.timestamp))],
       ["TIME", formatTime(new Date(attempt.timestamp))],
       ["SR NO.", attempt.serialNumber || "--"],
-      ["QR CODE", attempt.qrCode],
-      ["PART NO.", attempt.partNumber],
+      ["MODEL NO.", attempt.modelNumber || part.modelNumber || "--"],
       // <!-- Changed manually using GPT -->
       ["LEAK VALUE", attempt.leakTestValue == null ? "--" : `${formatLeakTestValue(attempt.leakTestValue)} ${leakUnit()}`],
       // ["LEAK VALUE", attempt.leakTestValue == null ? "--" : `${formatLeakTestValue(attempt.leakTestValue)} ${attempt.leakTestUnit}`],
