@@ -271,8 +271,8 @@ static LogicalPartQuery BuildLogicalPartQuery(
         ParseDate(from),
         ParseDate(to)?.AddDays(1),
         shift,
-        partNumber,
-        qrCode,
+        serialNumber,
+        modelNumber,
         result,
         limit);
 }
