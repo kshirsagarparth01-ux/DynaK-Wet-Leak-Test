@@ -15,6 +15,8 @@ public sealed class SettingsStore
         "Result Ready",
         "PLC Sequence / Cycle ID",
         "QR Code",
+        //code change by chatgpt
+        "QR Code Value",
         "Leak Lower Limit",
         "Leak Upper Limit",
         PlcSignalMapping.CombinedResultSignalName,
@@ -314,7 +316,14 @@ public sealed class SettingsStore
 
     private static List<PlcSignalMapping> NormalizeMappings(IEnumerable<PlcSignalMapping> mappings)
     {
-        var normalized = mappings.Select(Normalize).ToList();
+        //code change by chatgpt
+        // var normalized = mappings.Select(Normalize).ToList();
+        var normalized = mappings
+            .Select(Normalize)
+            .Where(mapping =>
+                !mapping.SignalName.Equals("QR Code", StringComparison.OrdinalIgnoreCase) &&
+                !mapping.SignalName.Equals("QR Code Value", StringComparison.OrdinalIgnoreCase))
+            .ToList();
         var hasOk = normalized.Any(mapping =>
             mapping.SignalName.Equals(PlcSignalMapping.OkResultSignalName, StringComparison.OrdinalIgnoreCase));
         var hasNg = normalized.Any(mapping =>

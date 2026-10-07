@@ -118,7 +118,9 @@ await RunAsync("v5 logical-part migration backs up and preserves existing histor
     var database = new SqliteDatabase(store, NullLogger<SqliteDatabase>.Instance);
     await database.InitializeAsync(CancellationToken.None);
     var records = new ProductionRepository(database);
-    await records.InsertAsync(SampleRecord(1060) with { QrCode = "QR-MIGRATION", PartNumber = "MIG-001" }, CancellationToken.None);
+    //code change by chatgpt
+    // await records.InsertAsync(SampleRecord(1060) with { QrCode = "QR-MIGRATION", PartNumber = "MIG-001" }, CancellationToken.None);
+    await records.InsertAsync(SampleRecord(1060) with { PartNumber = "MIG-001" }, CancellationToken.None);
 
     await using (var connection = await database.OpenConnectionAsync(CancellationToken.None))
     {
@@ -163,8 +165,11 @@ await RunAsync("v5 logical-part migration backs up and preserves existing histor
     AssertEqual("MIG-001", (await LogicalPartByNumberAsync(records, "MIG-001")).PartNumber);
     AssertEqual(1, Directory.GetFiles(root, "station.db.pre-v5-*.bak").Length);
 
-    await records.InsertAsync(SampleRecord(1061) with { QrCode = "", PartNumber = "MIG-002" }, CancellationToken.None);
-    await records.InsertAsync(SampleRecord(1062) with { QrCode = "", PartNumber = "MIG-003" }, CancellationToken.None);
+    //code change by chatgpt
+    // await records.InsertAsync(SampleRecord(1061) with { QrCode = "", PartNumber = "MIG-002" }, CancellationToken.None);
+    // await records.InsertAsync(SampleRecord(1062) with { QrCode = "", PartNumber = "MIG-003" }, CancellationToken.None);
+    await records.InsertAsync(SampleRecord(1061) with { PartNumber = "MIG-002" }, CancellationToken.None);
+    await records.InsertAsync(SampleRecord(1062) with { PartNumber = "MIG-003" }, CancellationToken.None);
     AssertEqual(3, await records.CountLogicalPartsAsync(CancellationToken.None));
 });
 
@@ -179,7 +184,9 @@ await RunAsync("v7 migration removes obsolete timing lifecycle columns without l
     var database = new SqliteDatabase(store, NullLogger<SqliteDatabase>.Instance);
     await database.InitializeAsync(CancellationToken.None);
     var records = new ProductionRepository(database);
-    await records.InsertAsync(SampleRecord(1090) with { PartNumber = "MIG-V7", QrCode = "QR-MIG-V7" }, CancellationToken.None);
+    //code change by chatgpt
+    // await records.InsertAsync(SampleRecord(1090) with { PartNumber = "MIG-V7", QrCode = "QR-MIG-V7" }, CancellationToken.None);
+    await records.InsertAsync(SampleRecord(1090) with { PartNumber = "MIG-V7" }, CancellationToken.None);
 
     await using (var connection = await database.OpenConnectionAsync(CancellationToken.None))
     {
@@ -194,7 +201,9 @@ await RunAsync("v7 migration removes obsolete timing lifecycle columns without l
 
     await database.InitializeAsync(CancellationToken.None);
     AssertEqual(1, await records.CountAsync(CancellationToken.None));
-    AssertEqual("MIG-V7", (await records.QueryAsync(new ProductionRecordQuery(null, null, null, "MIG-V7", null, null), CancellationToken.None)).Single().PartNumber);
+    //code change by chatgpt
+    // AssertEqual("MIG-V7", (await records.QueryAsync(new ProductionRecordQuery(null, null, null, "MIG-V7", null, null), CancellationToken.None)).Single().PartNumber);
+    AssertEqual("MIG-V7", (await records.QueryAsync(new ProductionRecordQuery(null, null, null, "MIG-V7", null), CancellationToken.None)).Single().PartNumber);
     await using (var connection = await database.OpenConnectionAsync(CancellationToken.None))
     await using (var command = connection.CreateCommand())
     {
@@ -205,15 +214,42 @@ await RunAsync("v7 migration removes obsolete timing lifecycle columns without l
     }
 });
 
-await RunAsync("NG and rework attempts share one logical QR part", async () =>
+//code change by chatgpt
+await RunAsync("new production rows keep the legacy QR column blank", async () =>
+{
+    var root = Path.Combine(Path.GetTempPath(), $"dynak-qr-compat-{Guid.NewGuid():N}");
+    var store = new SettingsStore(Options.Create(new AppSettings
+    {
+        DatabasePath = Path.Combine(root, "station.db"),
+        LiveLeakValueFilePath = Path.Combine(root, "live_leak_value.txt")
+    }), NullLogger<SettingsStore>.Instance);
+    var database = new SqliteDatabase(store, NullLogger<SqliteDatabase>.Instance);
+    await database.InitializeAsync(CancellationToken.None);
+    var records = new ProductionRepository(database);
+    var inserted = await records.InsertAsync(SampleRecord(1091) with { PartNumber = "QR-FREE-001" }, CancellationToken.None);
+    AssertTrue(inserted.Inserted && inserted.Id.HasValue, "expected QR-free production row to be inserted");
+
+    await using var connection = await database.OpenConnectionAsync(CancellationToken.None);
+    await using var command = connection.CreateCommand();
+    command.CommandText = "SELECT qr_code FROM production_records WHERE id = $id;";
+    command.Parameters.AddWithValue("$id", inserted.Id!.Value);
+    AssertEqual("", Convert.ToString(await command.ExecuteScalarAsync(CancellationToken.None)) ?? "");
+});
+
+//code change by chatgpt
+// await RunAsync("NG and rework attempts share one logical QR part", async () =>
+await RunAsync("NG and rework attempts share one logical Part Number", async () =>
 {
     var (repo, _) = await CreateRepositoriesAsync();
     var firstTest = new DateTimeOffset(2026, 8, 14, 10, 0, 0, TimeSpan.Zero);
     var reworkTest = firstTest.AddMinutes(30);
-    await repo.InsertAsync(SampleRecord(1101, firstTest, ProductionResult.NG) with { QrCode = "DYN240812002271" }, CancellationToken.None);
-    await repo.InsertAsync(SampleRecord(1102, reworkTest, ProductionResult.OK) with { QrCode = "DYN240812002271" }, CancellationToken.None);
+    // await repo.InsertAsync(SampleRecord(1101, firstTest, ProductionResult.NG) with { QrCode = "DYN240812002271" }, CancellationToken.None);
+    // await repo.InsertAsync(SampleRecord(1102, reworkTest, ProductionResult.OK) with { QrCode = "DYN240812002271" }, CancellationToken.None);
+    await repo.InsertAsync(SampleRecord(1101, firstTest, ProductionResult.NG) with { PartNumber = "PART-REWORK-001" }, CancellationToken.None);
+    await repo.InsertAsync(SampleRecord(1102, reworkTest, ProductionResult.OK) with { PartNumber = "PART-REWORK-001" }, CancellationToken.None);
 
-    var parts = await repo.QueryLogicalPartsAsync(new LogicalPartQuery(null, null, null, null, null, null, 10), CancellationToken.None);
+    // var parts = await repo.QueryLogicalPartsAsync(new LogicalPartQuery(null, null, null, null, null, null, 10), CancellationToken.None);
+    var parts = await repo.QueryLogicalPartsAsync(new LogicalPartQuery(null, null, null, null, null, 10), CancellationToken.None);
     var details = await repo.GetLogicalPartByIdAsync(parts[0].Id, CancellationToken.None);
 
     AssertEqual(1, parts.Count);
@@ -223,21 +259,27 @@ await RunAsync("NG and rework attempts share one logical QR part", async () =>
     AssertEqual("OK", details.Attempts[1].Result);
 });
 
-await RunAsync("recent parts returns ten logical QR parts", async () =>
+//code change by chatgpt
+// await RunAsync("recent parts returns ten logical QR parts", async () =>
+await RunAsync("recent parts returns ten logical Part Number records", async () =>
 {
     var (repo, _) = await CreateRepositoriesAsync();
     var start = new DateTimeOffset(2026, 8, 14, 8, 0, 0, TimeSpan.Zero);
     for (var index = 0; index < 12; index++)
     {
-        await repo.InsertAsync(SampleRecord(1200 + index, start.AddMinutes(index), ProductionResult.OK), CancellationToken.None);
+        // await repo.InsertAsync(SampleRecord(1200 + index, start.AddMinutes(index), ProductionResult.OK), CancellationToken.None);
+        await repo.InsertAsync(SampleRecord(1200 + index, start.AddMinutes(index), ProductionResult.OK) with { PartNumber = $"PART-{index:000}" }, CancellationToken.None);
     }
 
-    await repo.InsertAsync(SampleRecord(1300, start.AddHours(1), ProductionResult.REWORK) with { QrCode = "DYNTEST1200" }, CancellationToken.None);
-    var parts = await repo.QueryLogicalPartsAsync(new LogicalPartQuery(null, null, null, null, null, null, 10), CancellationToken.None);
+    // await repo.InsertAsync(SampleRecord(1300, start.AddHours(1), ProductionResult.REWORK) with { QrCode = "DYNTEST1200" }, CancellationToken.None);
+    await repo.InsertAsync(SampleRecord(1300, start.AddHours(1), ProductionResult.REWORK) with { PartNumber = "PART-000" }, CancellationToken.None);
+    // var parts = await repo.QueryLogicalPartsAsync(new LogicalPartQuery(null, null, null, null, null, null, 10), CancellationToken.None);
+    var parts = await repo.QueryLogicalPartsAsync(new LogicalPartQuery(null, null, null, null, null, 10), CancellationToken.None);
 
     AssertEqual(12, await repo.CountLogicalPartsAsync(CancellationToken.None));
     AssertEqual(10, parts.Count);
-    AssertEqual(10, parts.Select(part => part.QrCode).Distinct(StringComparer.OrdinalIgnoreCase).Count());
+    // AssertEqual(10, parts.Select(part => part.QrCode).Distinct(StringComparer.OrdinalIgnoreCase).Count());
+    AssertEqual(10, parts.Select(part => part.PartNumber).Distinct(StringComparer.OrdinalIgnoreCase).Count());
 });
 
 await RunAsync("overnight shift counters span midnight", async () =>
@@ -261,20 +303,26 @@ await RunAsync("overnight shift counters span midnight", async () =>
     AssertEqual(1, counters.Rework);
 });
 
-await RunAsync("history filters by date shift part QR and result", async () =>
+//code change by chatgpt
+// await RunAsync("history filters by date shift part QR and result", async () =>
+await RunAsync("history filters by date shift part and result", async () =>
 {
     var (repo, _) = await CreateRepositoriesAsync();
     var morning = new DateTimeOffset(2026, 8, 13, 7, 15, 0, TimeSpan.Zero);
     var afternoon = new DateTimeOffset(2026, 8, 13, 15, 15, 0, TimeSpan.Zero);
-    await repo.InsertAsync(SampleRecord(4001, morning, ProductionResult.OK) with { PartNumber = "78654-A01", QrCode = "QR-A" }, CancellationToken.None);
-    await repo.InsertAsync(SampleRecord(4002, afternoon, ProductionResult.NG) with { PartNumber = "78654-B02", QrCode = "QR-B" }, CancellationToken.None);
+    //code change by chatgpt
+    // await repo.InsertAsync(SampleRecord(4001, morning, ProductionResult.OK) with { PartNumber = "78654-A01", QrCode = "QR-A" }, CancellationToken.None);
+    // await repo.InsertAsync(SampleRecord(4002, afternoon, ProductionResult.NG) with { PartNumber = "78654-B02", QrCode = "QR-B" }, CancellationToken.None);
+    await repo.InsertAsync(SampleRecord(4001, morning, ProductionResult.OK) with { PartNumber = "78654-A01" }, CancellationToken.None);
+    await repo.InsertAsync(SampleRecord(4002, afternoon, ProductionResult.NG) with { PartNumber = "78654-B02" }, CancellationToken.None);
 
     var query = new ProductionRecordQuery(
         new DateTimeOffset(2026, 8, 13, 0, 0, 0, TimeSpan.Zero),
         new DateTimeOffset(2026, 8, 13, 23, 59, 59, TimeSpan.Zero),
         "SHIFT B",
         "B02",
-        "QR-B",
+        //code change by chatgpt
+        // "QR-B",
         ProductionResult.NG,
         20);
 
@@ -294,7 +342,8 @@ await RunAsync("part history Excel export uses filtered logical records and prod
     {
         SerialNumber = "SN-OLD-001",
         PartNumber = "78654-B02",
-        QrCode = "QR-EXPORT-COMPLETE-001",
+        //code change by chatgpt
+        // QrCode = "QR-EXPORT-COMPLETE-001",
         LeakTestValue = 0.123m,
         ResolvedMode = "Manual",
         IsAutoMode = false,
@@ -305,7 +354,8 @@ await RunAsync("part history Excel export uses filtered logical records and prod
     {
         SerialNumber = "SN-EXPORT-001",
         PartNumber = "78654-B02",
-        QrCode = "QR-EXPORT-COMPLETE-001",
+        //code change by chatgpt
+        // QrCode = "QR-EXPORT-COMPLETE-001",
         LeakTestValue = 0.4876m,
         LowerLimit = 0.010m,
         UpperLimit = 0.080m,
@@ -315,8 +365,9 @@ await RunAsync("part history Excel export uses filtered logical records and prod
     }, CancellationToken.None);
     await repo.InsertAsync(SampleRecord(4103, otherShift, ProductionResult.OK) with
     {
-        PartNumber = "78654-A01",
-        QrCode = "QR-EXPORT-SKIP-002"
+        PartNumber = "78654-A01"
+        //code change by chatgpt
+        // QrCode = "QR-EXPORT-SKIP-002"
     }, CancellationToken.None);
 
     var parts = await repo.QueryLogicalPartsAsync(new LogicalPartQuery(
@@ -324,7 +375,8 @@ await RunAsync("part history Excel export uses filtered logical records and prod
         new DateTimeOffset(2026, 8, 14, 0, 0, 0, TimeSpan.Zero),
         "SHIFT B",
         "B02",
-        "QR-EXPORT",
+        //code change by chatgpt
+        // "QR-EXPORT",
         "NG",
         null), CancellationToken.None);
     var exportLocalTime = new DateTime(2026, 8, 17, 16, 25, 0);
@@ -378,8 +430,9 @@ await RunAsync("part history Excel export uses filtered logical records and prod
     AssertTrue(cells["B4"].Attribute("t") is null, "date should be written as a numeric Excel date cell");
     AssertTrue(cells["C4"].Attribute("t") is null, "time should be written as a numeric Excel time cell");
     // <!-- Changed manually using GPT -->
-    AssertTrue(cells["G4"].Attribute("t") is null, "leak value should remain numeric");
+    //code change by chatgpt
     // AssertTrue(cells["G4"].Attribute("t") is null, "leak value should remain numeric");
+    AssertTrue(cells["F4"].Attribute("t") is null, "leak value should remain numeric");
     var leakNumberFormat = styles.Descendants(ns + "numFmt").Single(format => format.Attribute("numFmtId")?.Value == "166");
     AssertEqual("0.0000", leakNumberFormat.Attribute("formatCode")?.Value);
     // <!-- Changed manually using GPT -->
@@ -535,6 +588,50 @@ await RunSync("persisted settings cannot redirect the machine-owned database pat
     AssertEqual(configured.DatabasePath, store.Current.DatabasePath);
 });
 
+//code change by chatgpt
+await RunSync("persisted QR PLC mapping is removed while unrelated mappings are preserved", () =>
+{
+    var configured = new AppSettings();
+    var persisted = configured.Clone();
+    persisted.SignalMappings = PlcSignalMapping.CreateDefaults();
+    persisted.SignalMappings.Add(new PlcSignalMapping
+    {
+        SignalName = "QR Code Value",
+        Address = "D2050",
+        AddressType = "D Register",
+        DataType = "AsciiString",
+        Direction = "Read",
+        Length = 10,
+        Encoding = "ASCII",
+        Enabled = true
+    });
+    var store = new SettingsStore(Options.Create(configured), NullLogger<SettingsStore>.Instance);
+
+    store.ApplyPersisted(new Dictionary<string, string>
+    {
+        ["app_settings_json"] = JsonSerializer.Serialize(persisted, new JsonSerializerOptions(JsonSerializerDefaults.Web))
+    });
+
+    AssertTrue(store.Current.SignalMappings.All(mapping => !mapping.SignalName.Equals("QR Code Value", StringComparison.OrdinalIgnoreCase)), "legacy QR mapping must not survive settings merge");
+    AssertTrue(store.Current.SignalMappings.Any(mapping => mapping.SignalName == "Part Number"), "Part Number mapping must remain present");
+
+    //code change by chatgpt
+    var updateMappings = PlcSignalMapping.CreateDefaults();
+    updateMappings.Add(new PlcSignalMapping
+    {
+        SignalName = "QR Code Value",
+        Address = "D2050",
+        AddressType = "D Register",
+        DataType = "AsciiString",
+        Direction = "Read",
+        Length = 10,
+        Encoding = "ASCII",
+        Enabled = true
+    });
+    var candidate = store.BuildCandidate(new SettingsUpdate(null, null, null, null, null, updateMappings, null));
+    AssertTrue(candidate.SignalMappings.All(mapping => !mapping.SignalName.Equals("QR Code Value", StringComparison.OrdinalIgnoreCase)), "QR mapping submitted through settings update must be stripped");
+});
+
 await RunSync("invalid configuration is rejected", () =>
 {
     var store = new SettingsStore(Options.Create(new AppSettings()), NullLogger<SettingsStore>.Instance);
@@ -651,7 +748,9 @@ await RunSync("default PLC spans match reserved D-register ranges", () =>
     AssertEqual(3, mappings.First(m => m.SignalName == "Time").Length);
     AssertEqual("AsciiString", mappings.First(m => m.SignalName == "Leak Test Value").DataType);
     AssertEqual(5, mappings.First(m => m.SignalName == "Leak Test Value").Length);
-    AssertEqual(10, mappings.First(m => m.SignalName == "QR Code Value").Length);
+    //code change by chatgpt
+    // AssertEqual(10, mappings.First(m => m.SignalName == "QR Code Value").Length);
+    AssertTrue(mappings.All(m => !m.SignalName.Equals("QR Code Value", StringComparison.OrdinalIgnoreCase)), "QR Code Value must not be present in active PLC defaults");
     AssertEqual(10, mappings.First(m => m.SignalName == "Part Number").Length);
     var partDataReady = mappings.First(m => m.SignalName == PlcSignalMapping.PartDataReadySignalName);
     AssertEqual("D1075", partDataReady.Address);
@@ -667,7 +766,9 @@ await RunSync("packaged configuration does not index-merge PLC mapping defaults 
 
     AssertEqual(JsonValueKind.Array, packagedMappings.ValueKind);
     AssertEqual(0, packagedMappings.GetArrayLength());
-    AssertEqual(17, PlcSignalMapping.CreateDefaults().Count);
+    //code change by chatgpt
+    // AssertEqual(17, PlcSignalMapping.CreateDefaults().Count);
+    AssertEqual(16, PlcSignalMapping.CreateDefaults().Count);
 });
 
 await RunSync("Serial Number PLC mapping defaults to editable D2000 start and stays disabled until fully commissioned", () =>
@@ -706,14 +807,18 @@ await RunSync("operational PLC mapping validation identifies each blocking field
     var mappings = PlcSignalMapping.CreateDefaults();
     mappings.First(mapping => mapping.SignalName == "System Ready").Enabled = false;
     mappings.First(mapping => mapping.SignalName == "Leak Test Value").Address = null;
-    mappings.First(mapping => mapping.SignalName == "QR Code Value").Length = 0;
+    //code change by chatgpt
+    // mappings.First(mapping => mapping.SignalName == "QR Code Value").Length = 0;
+    mappings.First(mapping => mapping.SignalName == "Part Number").Length = 0;
     mappings.First(mapping => mapping.SignalName == "Communication OK").Address = "D-not-a-register";
 
     var errors = PlcSignalMapping.GetOperationalValidationErrors(mappings);
 
     AssertTrue(!errors.Contains("System Ready is disabled."), string.Join(" ", errors));
     AssertTrue(errors.Contains("Leak Test Value has no address."), string.Join(" ", errors));
-    AssertTrue(errors.Contains("QR Code Value requires a register length."), string.Join(" ", errors));
+    //code change by chatgpt
+    // AssertTrue(errors.Contains("QR Code Value requires a register length."), string.Join(" ", errors));
+    AssertTrue(errors.Contains("Part Number requires a register length."), string.Join(" ", errors));
     AssertTrue(errors.Contains("Communication OK address 'D-not-a-register' is invalid."), string.Join(" ", errors));
 });
 
@@ -725,7 +830,9 @@ await RunSync("PLC diagnostic exposes live values for every configured mapping",
         [PlcSignalMapping.OkResultSignalName] = new PlcSignalValue(1m, "OK", true),
         [PlcSignalMapping.NgResultSignalName] = new PlcSignalValue(0m, 0m, false),
         ["Time"] = new PlcSignalValue("154218", "15:42:18", false),
-        ["QR Code Value"] = new PlcSignalValue("QR-123", "QR-123", false)
+        //code change by chatgpt
+        // ["QR Code Value"] = new PlcSignalValue("QR-123", "QR-123", false)
+        ["Part Number"] = new PlcSignalValue("PART-123", "PART-123", false)
     };
 
     var signals = PlcCommissioningDiagnostic.BuildSignals(mappings, values);
@@ -733,7 +840,9 @@ await RunSync("PLC diagnostic exposes live values for every configured mapping",
     AssertEqual(mappings.Count, signals.Count);
     AssertEqual("OK", signals.First(s => s.SignalName == PlcSignalMapping.OkResultSignalName).InterpretedValue);
     AssertEqual("15:42:18", signals.First(s => s.SignalName == "Time").InterpretedValue);
-    AssertEqual("QR-123", signals.First(s => s.SignalName == "QR Code Value").RawValue);
+    //code change by chatgpt
+    // AssertEqual("QR-123", signals.First(s => s.SignalName == "QR Code Value").RawValue);
+    AssertEqual("PART-123", signals.First(s => s.SignalName == "Part Number").RawValue);
 
     AssertTrue(!PlcCommissioningDiagnostic.From(new AppSettings { SignalMappings = mappings }).ReadOnly, "enabled handshake mappings should not be shown as read-only");
     mappings.First(mapping => mapping.SignalName == "Data Saved").Enabled = false;
@@ -773,7 +882,9 @@ await RunSync("all configurable PLC mapping fields survive settings normalizatio
 {
     var store = new SettingsStore(Options.Create(new AppSettings()), NullLogger<SettingsStore>.Instance);
     var mappings = PlcSignalMapping.CreateDefaults();
-    var edited = mappings.First(mapping => mapping.SignalName == "QR Code Value");
+    //code change by chatgpt
+    // var edited = mappings.First(mapping => mapping.SignalName == "QR Code Value");
+    var edited = mappings.First(mapping => mapping.SignalName == "Part Number");
     edited.Address = "D2070";
     edited.AddressType = "Holding Register";
     edited.DataType = "AsciiString";
@@ -790,7 +901,9 @@ await RunSync("all configurable PLC mapping fields survive settings normalizatio
     edited.Description = "Commissioned mapping";
 
     var candidate = store.BuildCandidate(new SettingsUpdate(null, null, null, null, null, mappings, null));
-    var actual = candidate.SignalMappings.First(mapping => mapping.SignalName == "QR Code Value");
+    //code change by chatgpt
+    // var actual = candidate.SignalMappings.First(mapping => mapping.SignalName == "QR Code Value");
+    var actual = candidate.SignalMappings.First(mapping => mapping.SignalName == "Part Number");
 
     AssertEqual("D2070", actual.Address);
     AssertEqual("Holding Register", actual.AddressType);
@@ -885,7 +998,9 @@ await RunSync("invalid PLC datatype and register spans are rejected", () =>
     AssertThrows<SettingsValidationException>(() => SettingsStore.Validate(new AppSettings { SignalMappings = badPartSpan }));
 
     var zeroStringLength = PlcSignalMapping.CreateDefaults();
-    zeroStringLength.First(m => m.SignalName == "QR Code Value").Length = 0;
+    //code change by chatgpt
+    // zeroStringLength.First(m => m.SignalName == "QR Code Value").Length = 0;
+    zeroStringLength.First(m => m.SignalName == "Part Number").Length = 0;
     AssertThrows<SettingsValidationException>(() => SettingsStore.Validate(new AppSettings { SignalMappings = zeroStringLength }));
 
     var inverseHandshake = PlcSignalMapping.CreateDefaults();
@@ -999,7 +1114,9 @@ await RunAsync("new unsaved Part Number stays pending while LOW and saves once w
 {
     await using var harness = await PartDataHarness.CreateAsync();
     var settings = harness.Settings.Current;
-    harness.Plc.Enqueue(PartSnapshot(8101, "READY-100", "QR-READY-100", 0.250m, "PLC-SN-001", 0.500m));
+    //code change by chatgpt
+    // harness.Plc.Enqueue(PartSnapshot(8101, "READY-100", "QR-READY-100", 0.250m, "PLC-SN-001", 0.500m));
+    harness.Plc.Enqueue(PartSnapshot(8101, "READY-100", 0.250m, "PLC-SN-001", 0.500m));
 
     await harness.Trigger.ProcessPollAsync(settings, PartDataReadySignals(false, "READY-100"), CancellationToken.None);
     AssertEqual(0, harness.Plc.SnapshotReadCount);
@@ -1019,7 +1136,9 @@ await RunAsync("new unsaved Part Number stays pending while LOW and saves once w
     var changedSettings = settings.Clone();
     changedSettings.UpperLimit = 0.750m;
     harness.Settings.Activate(changedSettings);
-    harness.Plc.Enqueue(PartSnapshot(8102, "READY-101", "QR-READY-101", 0.300m, "PLC-SN-002", 0.750m));
+    //code change by chatgpt
+    // harness.Plc.Enqueue(PartSnapshot(8102, "READY-101", "QR-READY-101", 0.300m, "PLC-SN-002", 0.750m));
+    harness.Plc.Enqueue(PartSnapshot(8102, "READY-101", 0.300m, "PLC-SN-002", 0.750m));
     await harness.Trigger.ProcessPollAsync(changedSettings, PartDataReadySignals(true, "READY-101"), CancellationToken.None);
 
     AssertEqual(2, harness.Plc.SnapshotReadCount);
@@ -1034,8 +1153,11 @@ await RunAsync("new unsaved Part Number stays pending while LOW and saves once w
     AssertEqual(2, harness.Plc.SnapshotReadCount);
     AssertEqual(2, await harness.Records.CountAsync(CancellationToken.None));
 
-    var first = (await harness.Records.QueryAsync(new ProductionRecordQuery(null, null, null, "READY-100", null, null), CancellationToken.None)).Single();
-    var second = (await harness.Records.QueryAsync(new ProductionRecordQuery(null, null, null, "READY-101", null, null), CancellationToken.None)).Single();
+    //code change by chatgpt
+    // var first = (await harness.Records.QueryAsync(new ProductionRecordQuery(null, null, null, "READY-100", null, null), CancellationToken.None)).Single();
+    // var second = (await harness.Records.QueryAsync(new ProductionRecordQuery(null, null, null, "READY-101", null, null), CancellationToken.None)).Single();
+    var first = (await harness.Records.QueryAsync(new ProductionRecordQuery(null, null, null, "READY-100", null), CancellationToken.None)).Single();
+    var second = (await harness.Records.QueryAsync(new ProductionRecordQuery(null, null, null, "READY-101", null), CancellationToken.None)).Single();
     AssertEqual("PLC-SN-001", first.SerialNumber);
     AssertEqual(0.250m, first.LeakTestValue);
     AssertEqual(0.500m, first.UpperLimit);
@@ -1065,7 +1187,9 @@ await RunAsync("snapshot failure retries on the next poll while D1075 remains HI
     AssertEqual(1, harness.Plc.SnapshotReadCount);
     AssertEqual(0, await harness.Records.CountAsync(CancellationToken.None));
 
-    harness.Plc.Enqueue(PartSnapshot(8103, "READY-AFTER-FAILURE", "QR-AFTER-FAILURE", 0.125m));
+    //code change by chatgpt
+    // harness.Plc.Enqueue(PartSnapshot(8103, "READY-AFTER-FAILURE", "QR-AFTER-FAILURE", 0.125m));
+    harness.Plc.Enqueue(PartSnapshot(8103, "READY-AFTER-FAILURE", 0.125m));
     await harness.Trigger.ProcessPollAsync(settings, PartDataReadySignals(true, "READY-AFTER-FAILURE"), CancellationToken.None);
 
     AssertEqual(2, harness.Plc.SnapshotReadCount);
@@ -1088,12 +1212,16 @@ await RunAsync("D1075 HIGH saves a valid Part Number when optional PLC values ar
 {
     await using var harness = await PartDataHarness.CreateAsync();
     var settings = harness.Settings.Current;
-    harness.Plc.Enqueue(PartSnapshot(8104, "000022", "PAR411", null));
+    //code change by chatgpt
+    // harness.Plc.Enqueue(PartSnapshot(8104, "000022", "PAR411", null));
+    harness.Plc.Enqueue(PartSnapshot(8104, "000022", null));
 
     await harness.Trigger.ProcessPollAsync(settings, PartDataReadySignals(true, "000022"), CancellationToken.None);
 
     var saved = (await harness.Records.QueryAsync(
-        new ProductionRecordQuery(null, null, null, "000022", null, null),
+        //code change by chatgpt
+        // new ProductionRecordQuery(null, null, null, "000022", null, null)
+        new ProductionRecordQuery(null, null, null, "000022", null),
         CancellationToken.None)).Single();
     AssertEqual<decimal?>(null, saved.LeakTestValue);
     AssertTrue(!File.Exists(settings.LiveLeakValueFilePath), "a missing PLC leak value must not create a fake live leak-value file");
@@ -1126,7 +1254,8 @@ await RunAsync("daily reports recover and roll over month year and canonical fil
         await records.InsertAsync(SampleRecord(7000 + index, dates[index]) with
         {
             SerialNumber = $"DAILY-SN-{index + 1:000}",
-            QrCode = $"DAILY-QR-{index + 1:000}",
+            //code change by chatgpt
+            // QrCode = $"DAILY-QR-{index + 1:000}",
             PartNumber = $"DAILY-PART-{index + 1:000}"
         }, CancellationToken.None);
     }
@@ -1160,7 +1289,8 @@ await RunAsync("daily reports recover and roll over month year and canonical fil
     await records.InsertAsync(SampleRecord(7100, dates[0].AddHours(1)) with
     {
         SerialNumber = "DAILY-SN-SECOND",
-        QrCode = "DAILY-QR-SECOND",
+        //code change by chatgpt
+        // QrCode = "DAILY-QR-SECOND",
         PartNumber = "DAILY-PART-SECOND",
         UpperLimit = 0.750m
     }, CancellationToken.None);
@@ -1176,10 +1306,14 @@ await RunAsync("failed Data Saved acknowledgement does not block later local His
     await using var harness = await PartDataHarness.CreateAsync(enableDataSaved: true, failDataSavedWrites: true);
     var settings = harness.Settings.Current;
 
-    harness.Plc.Enqueue(PartSnapshot(8201, "ACK100", "QR100", 0.100m));
+    //code change by chatgpt
+    // harness.Plc.Enqueue(PartSnapshot(8201, "ACK100", "QR100", 0.100m));
+    harness.Plc.Enqueue(PartSnapshot(8201, "ACK100", 0.100m));
     await harness.Trigger.ProcessPollAsync(settings, PartDataReadySignals(true, "ACK100"), CancellationToken.None);
 
-    harness.Plc.Enqueue(PartSnapshot(8202, "ACK101", "QR101", 0.101m));
+    //code change by chatgpt
+    // harness.Plc.Enqueue(PartSnapshot(8202, "ACK101", "QR101", 0.101m));
+    harness.Plc.Enqueue(PartSnapshot(8202, "ACK101", 0.101m));
     await harness.Trigger.ProcessPollAsync(settings, PartDataReadySignals(true, "ACK101"), CancellationToken.None);
 
     AssertEqual(2, await harness.Records.CountAsync(CancellationToken.None));
@@ -1188,7 +1322,9 @@ await RunAsync("failed Data Saved acknowledgement does not block later local His
 
 await RunAsync("production acquisition saves new Part Numbers once while D1075 remains HIGH and retries failed inserts", async () =>
 {
-    await using var server = await ModbusTestServer.StartAsync(ProductionRegisters(actual: 1, leak: "0.327", qrCode: "QR001", partNumber: "PART001", partDataReady: 1));
+    //code change by chatgpt
+    // await using var server = await ModbusTestServer.StartAsync(ProductionRegisters(actual: 1, leak: "0.327", qrCode: "QR001", partNumber: "PART001", partDataReady: 1));
+    await using var server = await ModbusTestServer.StartAsync(ProductionRegisters(actual: 1, leak: "0.327", partNumber: "PART001", partDataReady: 1));
     var testRoot = Path.Combine(Path.GetTempPath(), $"dynak-part-data-ready-{Guid.NewGuid():N}");
     var temp = Path.Combine(testRoot, "station.db");
     var liveLeakValuePath = Path.Combine(testRoot, "live_leak_value.txt");
@@ -1250,16 +1386,20 @@ await RunAsync("production acquisition saves new Part Numbers once while D1075 r
     await WaitUntilAsync(() => server.Registers.TryGetValue(2122, out var dataSaved) && dataSaved == 0, TimeSpan.FromSeconds(5), "configured DATA SAVED did not pulse ON after the complete database and text-file writes");
     AssertEqual(1, await records.CountLogicalPartsAsync(CancellationToken.None));
     AssertEqual("0.327", await File.ReadAllTextAsync(liveLeakValuePath));
-    var part1 = (await records.QueryAsync(new ProductionRecordQuery(null, null, null, "PART001", null, null), CancellationToken.None)).Single();
+    //code change by chatgpt
+    // var part1 = (await records.QueryAsync(new ProductionRecordQuery(null, null, null, "PART001", null, null), CancellationToken.None)).Single();
+    var part1 = (await records.QueryAsync(new ProductionRecordQuery(null, null, null, "PART001", null), CancellationToken.None)).Single();
     AssertEqual("PART001", part1.PartNumber);
-    AssertEqual("QR001", part1.QrCode);
+    //code change by chatgpt
+    // AssertEqual("QR001", part1.QrCode);
     AssertEqual(0.327m, part1.LeakTestValue);
     AssertTrue(part1.PlcSnapshotJson.Contains("Part Data Ready", StringComparison.Ordinal), part1.PlcSnapshotJson);
     AssertTrue(server.ObservedReadRanges.Any(read => read.Start == 1075 && read.Count == 1), "D1075 did not resolve to zero-based Modbus holding-register address 1075 with offset 0");
     AssertTrue(!server.ObservedWriteValues.Any(write => write.Start == 1075), "the PC must never write HIGH or LOW to D1075");
 
     server.Registers[2005] = 7;
-    AddAsciiRegisters(server.Registers, 2050, "QR-CHANGED", 10);
+    //code change by chatgpt
+    // AddAsciiRegisters(server.Registers, 2050, "QR-CHANGED", 10);
     await Task.Delay(400);
     AssertEqual(1, await records.CountAsync(CancellationToken.None));
     AssertEqual("PART001", (await records.GetByIdAsync(part1.Id, CancellationToken.None))!.PartNumber);
@@ -1271,17 +1411,21 @@ await RunAsync("production acquisition saves new Part Numbers once while D1075 r
     server.Registers[1010] = 1;
     server.Registers[1011] = 0;
     AddAsciiRegisters(server.Registers, 2025, "0.111", 5);
-    AddAsciiRegisters(server.Registers, 2050, "QR002", 10);
+    //code change by chatgpt
+    // AddAsciiRegisters(server.Registers, 2050, "QR002", 10);
     AddAsciiRegisters(server.Registers, 2060, "PART002", 10);
     await WaitUntilAsync(() => records.CountAsync(CancellationToken.None).GetAwaiter().GetResult() == 2, TimeSpan.FromSeconds(5), "PART002 was not saved after Part Number changed while D1075 stayed HIGH");
     await WaitUntilAsync(() => server.ObservedWriteValues.Count(write => write.Start == 2122 && write.Value == 0) == 2, TimeSpan.FromSeconds(5), "PART002 DATA SAVED pulse was not emitted");
     AssertEqual("0.111", await File.ReadAllTextAsync(liveLeakValuePath));
-    var savedParts = await records.QueryAsync(new ProductionRecordQuery(null, null, null, null, null, null), CancellationToken.None);
+    //code change by chatgpt
+    // var savedParts = await records.QueryAsync(new ProductionRecordQuery(null, null, null, null, null, null), CancellationToken.None);
+    var savedParts = await records.QueryAsync(new ProductionRecordQuery(null, null, null, null, null), CancellationToken.None);
     AssertEqual(2, savedParts.Count);
     AssertEqual(0.327m, savedParts.Single(record => record.PartNumber == "PART001").LeakTestValue);
-    AssertEqual("QR001", savedParts.Single(record => record.PartNumber == "PART001").QrCode);
+    //code change by chatgpt
+    // AssertEqual("QR001", savedParts.Single(record => record.PartNumber == "PART001").QrCode);
     AssertEqual(0.111m, savedParts.Single(record => record.PartNumber == "PART002").LeakTestValue);
-    AssertEqual("QR002", savedParts.Single(record => record.PartNumber == "PART002").QrCode);
+    // AssertEqual("QR002", savedParts.Single(record => record.PartNumber == "PART002").QrCode);
     AssertTrue(!server.ObservedWriteValues.Any(write => write.Start == 1075), "D1075 must remain read-only across all pulses");
 
     server.DropConnection();
@@ -1295,7 +1439,8 @@ await RunAsync("production acquisition saves new Part Numbers once while D1075 r
     var pulsesBeforeFailure = server.ObservedWriteValues.Count(write => write.Start == 2122 && write.Value == 0);
     server.Registers[2005] = 3;
     AddAsciiRegisters(server.Registers, 2025, "0.222", 5);
-    AddAsciiRegisters(server.Registers, 2050, "QR003", 10);
+    //code change by chatgpt
+    // AddAsciiRegisters(server.Registers, 2050, "QR003", 10);
     AddAsciiRegisters(server.Registers, 2060, "PART003", 10);
     await WaitUntilAsync(() => partDataReady.State == PartDataReadyState.SAVING, TimeSpan.FromSeconds(3), "PART003 insert failure did not enter retry state");
     await Task.Delay(600);
@@ -1310,7 +1455,9 @@ await RunAsync("production acquisition saves new Part Numbers once while D1075 r
         await SqliteDatabase.ExecuteAsync(connection, "DROP TRIGGER reject_production_insert;", CancellationToken.None);
     }
     await WaitUntilAsync(() => records.CountAsync(CancellationToken.None).GetAwaiter().GetResult() == 3, TimeSpan.FromSeconds(5), "PART003 database insert was not retried after D1075 returned LOW");
-    AssertEqual("PART003", (await records.QueryAsync(new ProductionRecordQuery(null, null, null, "PART003", null, null), CancellationToken.None)).Single().PartNumber);
+    //code change by chatgpt
+    // AssertEqual("PART003", (await records.QueryAsync(new ProductionRecordQuery(null, null, null, "PART003", null, null), CancellationToken.None)).Single().PartNumber);
+    AssertEqual("PART003", (await records.QueryAsync(new ProductionRecordQuery(null, null, null, "PART003", null), CancellationToken.None)).Single().PartNumber);
 
     using var stopTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
     await runtime.RequestStopAsync(stopTimeout.Token);
@@ -1373,7 +1520,8 @@ await RunAsync("Modbus client reads D registers and only writes handshake allow-
     await client.WriteConfiguredSignalAsync("Communication OK", true, CancellationToken.None);
     await client.WriteConfiguredSignalAsync(PlcSafety.DataSavedSignalName, true, CancellationToken.None);
 
-    AssertEqual("QR-123", snapshot.QrCode);
+    //code change by chatgpt
+    // AssertEqual("QR-123", snapshot.QrCode);
     AssertEqual("PN-999", snapshot.PartNumber);
     AssertEqual("PLC-SERIAL-009", snapshot.SerialNumber);
     AssertEqual(450, snapshot.TargetPartsPerShift);
@@ -1396,11 +1544,13 @@ await RunAsync("Modbus client reads D registers and only writes handshake allow-
     await AssertThrowsAsync<PlcWriteBlockedException>(() => client.WriteConfiguredSignalAsync(PlcSignalMapping.PartDataReadySignalName, true, CancellationToken.None));
     AssertTrue(!server.ObservedWriteValues.Any(write => write.Start == 1075), "D1075 must never receive a PLC write frame");
 
-    AddAsciiRegisters(server.Registers, 2050, "0", 10);
+    //code change by chatgpt
+    // AddAsciiRegisters(server.Registers, 2050, "0", 10);
     AddAsciiRegisters(server.Registers, 2060, "0", 10);
     var zeroValueSnapshot = await client.ReadPartDataSnapshotAsync(CancellationToken.None) ??
-        throw new InvalidOperationException("D1075 snapshots must not be rejected based on QR Code or Part Number values");
-    AssertEqual("0", zeroValueSnapshot.QrCode);
+        // throw new InvalidOperationException("D1075 snapshots must not be rejected based on QR Code or Part Number values");
+        throw new InvalidOperationException("D1075 snapshots must not be rejected based on Part Number values");
+    // AssertEqual("0", zeroValueSnapshot.QrCode);
     AssertEqual("0", zeroValueSnapshot.PartNumber);
 
     await client.DisconnectAsync(CancellationToken.None);
@@ -1433,7 +1583,9 @@ await RunAsync("one undecodable PLC mapping does not block the shared live snaps
     await client.ConnectAsync(PlcClientConfiguration.From(settings), CancellationToken.None);
 
     var signals = await client.ReadConfiguredSignalsAsync(CancellationToken.None);
-    AssertEqual(13, signals.Count);
+    //code change by chatgpt
+    // AssertEqual(13, signals.Count);
+    AssertEqual(12, signals.Count);
     AssertEqual(123m, signals["Target Parts Per Shift"].InterpretedValue);
     AssertEqual(50m, signals["Actual Part Count"].InterpretedValue);
     AssertEqual(1234m, signals["Leak Test Value"].InterpretedValue);
@@ -1495,7 +1647,9 @@ await RunAsync("Modbus failed and partial multi-register reads are rejected", as
     }), CancellationToken.None);
     await AssertThrowsAsync<IOException>(() => failedClient.ReadPartDataSnapshotAsync(CancellationToken.None));
 
-    await using var partialServer = await ModbusTestServer.StartAsync(ProductionRegisters(), partialReadStarts: [2050]);
+    //code change by chatgpt
+    // await using var partialServer = await ModbusTestServer.StartAsync(ProductionRegisters(), partialReadStarts: [2050]);
+    await using var partialServer = await ModbusTestServer.StartAsync(ProductionRegisters(), partialReadStarts: [2060]);
     await using var partialClient = new MitsubishiModbusPlcClient();
     await partialClient.ConnectAsync(PlcClientConfiguration.From(new AppSettings
     {
@@ -1515,7 +1669,8 @@ await RunAsync("unknown PLC enum values are stored as raw values with unknown me
         mode: 8,
         error: 7,
         running: 6,
-        qrCode: "QR-UNK",
+        //code change by chatgpt
+        // qrCode: "QR-UNK",
         partNumber: "PN-UNK"));
     await using var client = new MitsubishiModbusPlcClient();
 
@@ -1647,7 +1802,8 @@ static Dictionary<int, ushort> ProductionRegisters(
     ushort mode = 1,
     ushort error = 0,
     ushort running = 1,
-    string qrCode = "QR-123",
+    //code change by chatgpt
+    // string qrCode = "QR-123",
     string partNumber = "PN-999",
     ushort partDataReady = 0)
 {
@@ -1669,7 +1825,8 @@ static Dictionary<int, ushort> ProductionRegisters(
     registers[1021] = (ushort)parsedTime.Minute;
     registers[1022] = (ushort)parsedTime.Second;
     AddAsciiRegisters(registers, 2025, leak, 5);
-    AddAsciiRegisters(registers, 2050, qrCode, 10);
+    //code change by chatgpt
+    // AddAsciiRegisters(registers, 2050, qrCode, 10);
     AddAsciiRegisters(registers, 2060, partNumber, 10);
     return registers;
 }
@@ -1727,7 +1884,8 @@ static ProductionRecord SampleRecord(long sequenceId = 1001, DateTimeOffset? tim
         "TEST-STATION",
         sequenceId,
         null,
-        $"DYNTEST{sequenceId}",
+        //code change by chatgpt
+        // $"DYNTEST{sequenceId}",
         "78654-A01",
         DateOnly.FromDateTime(now.DateTime),
         TimeOnly.FromDateTime(now.DateTime),
@@ -1844,10 +2002,17 @@ static IReadOnlyDictionary<string, PlcSignalValue> PartDataReadySignals(bool hig
     return signals;
 }
 
+//code change by chatgpt
+// static PartDataSnapshot PartSnapshot(
+//     long sequenceId,
+//     string partNumber,
+//     string qrCode,
+//     decimal? leakValue,
+//     string? serialNumber = null,
+//     decimal upperLimit = 0.500m)
 static PartDataSnapshot PartSnapshot(
     long sequenceId,
     string partNumber,
-    string qrCode,
     decimal? leakValue,
     string? serialNumber = null,
     decimal upperLimit = 0.500m)
@@ -1856,7 +2021,8 @@ static PartDataSnapshot PartSnapshot(
     var signals = new Dictionary<string, PlcSignalValue>(StringComparer.OrdinalIgnoreCase)
     {
         ["Part Number"] = new PlcSignalValue(partNumber, partNumber, false),
-        ["QR Code Value"] = new PlcSignalValue(qrCode, qrCode, false),
+        //code change by chatgpt
+        // ["QR Code Value"] = new PlcSignalValue(qrCode, qrCode, false),
         ["Leak Test Value"] = new PlcSignalValue(leakValue, leakValue, false),
         ["Custom Production Value"] = new PlcSignalValue(42, "customProductionValue", false),
         [PlcSignalMapping.PartDataReadySignalName] = new PlcSignalValue(1, "HIGH", true)
@@ -1864,7 +2030,8 @@ static PartDataSnapshot PartSnapshot(
     return new PartDataSnapshot(
         "TEST-STATION",
         serialNumber,
-        qrCode,
+        //code change by chatgpt
+        // qrCode,
         partNumber,
         450,
         null,
@@ -1889,7 +2056,9 @@ static PartDataSnapshot PartSnapshot(
 static async Task<LogicalPart> LogicalPartByNumberAsync(ProductionRepository records, string partNumber)
 {
     var parts = await records.QueryLogicalPartsAsync(
-        new LogicalPartQuery(null, null, null, partNumber, null, null, 20),
+        //code change by chatgpt
+        // new LogicalPartQuery(null, null, null, partNumber, null, null, 20)
+        new LogicalPartQuery(null, null, null, partNumber, null, 20),
         CancellationToken.None);
     return parts.Single(part => string.Equals(part.PartNumber, partNumber, StringComparison.Ordinal));
 }

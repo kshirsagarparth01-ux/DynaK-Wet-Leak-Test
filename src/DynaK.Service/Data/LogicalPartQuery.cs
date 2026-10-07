@@ -5,6 +5,7 @@ public sealed record LogicalPartQuery(
     DateTimeOffset? ToExclusive,
     string? Shift,
     string? PartNumber,
-    string? QrCode,
+    //code change by chatgpt
+    // string? QrCode,
     string? Result,
     int? Limit = 200);

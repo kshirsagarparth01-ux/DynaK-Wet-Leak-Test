@@ -12,8 +12,13 @@ const backendHostSource = await readFile(new URL("../src/DynaK.WetLeakTest.Deskt
 const serviceProjectSource = await readFile(new URL("../src/DynaK.Service/DynaK.Service.csproj", import.meta.url), "utf8");
 const mappingRows = { innerHTML: "" };
 const buildFields = new Map(["buildAppVersion", "buildUiId", "buildDate", "buildSourceRevision"].map((id) => [id, { textContent: "" }]));
+//code change by chatgpt
+// const currentFields = new Map([
+//   "currentSerialNumber", "currentQr", "currentPartNo", "currentLeak", "currentLeakUnit", "currentLeakRange", "currentPlcQr",
+//   "currentResult", "currentMode", "currentError"
+// ].map((id) => [id, { textContent: "", disabled: false, className: "" }]));
 const currentFields = new Map([
-  "currentSerialNumber", "currentQr", "currentPartNo", "currentLeak", "currentLeakUnit", "currentLeakRange", "currentPlcQr",
+  "currentSerialNumber", "currentPartNo", "currentLeak", "currentLeakUnit", "currentLeakRange",
   "currentResult", "currentMode", "currentError"
 ].map((id) => [id, { textContent: "", disabled: false, className: "" }]));
 const context = vm.createContext({
@@ -21,7 +26,9 @@ const context = vm.createContext({
     config: { supportedByteOrders: ["", "ABCD", "BADC", "CDAB", "DCBA"] },
     settingsEditing: true,
     plcSignals: [],
-    parts: [{ qrCode: "QR-123" }]
+    //code change by chatgpt
+    // parts: [{ qrCode: "QR-123" }]
+    parts: [{ partNumber: "PART-50" }]
   },
   $: (id) => id === "mappingRows" ? mappingRows : buildFields.get(id) ?? currentFields.get(id) ?? null,
   dataTypeOptions: () => [{ value: "AsciiString", label: "ASCII STRING" }],
@@ -49,6 +56,9 @@ for (const name of [
   "liveSignalText",
   "formatLeakTestValue",
   "formatLeakRange",
+  //code change by chatgpt
+  // "renderCurrentPart",
+  "leakUnit",
   "renderCurrentPart",
   "resultClass",
   "renderBuildInfo"
@@ -196,14 +206,16 @@ test("Current Test renders the shared decoded PLC snapshot and configured value 
   context.state.config.upperLimit = 0.5;
   context.renderCurrentPart({
     serialNumber: "PLC-SN-123",
-    qrCode: "QR-123",
+    //code change by chatgpt
+    // qrCode: "QR-123",
     partNumber: "PART-50",
     // <!-- Changed manually using GPT -->
     leakTestUnit: "LPM",
     lowerLimit: 0,
     upperLimit: 0.5
   }, {
-    "QR Code Value": { rawValue: "QR-123", interpretedValue: "QR-123", valueMapMatched: false },
+    //code change by chatgpt
+    // "QR Code Value": { rawValue: "QR-123", interpretedValue: "QR-123", valueMapMatched: false },
     "Part Number": { rawValue: "PART-50", interpretedValue: "PART-50", valueMapMatched: false },
     "Leak Test Value": { rawValue: "0 .125", interpretedValue: 0.125, valueMapMatched: false },
     "OK": { rawValue: 1, interpretedValue: "OK", valueMapMatched: true },
@@ -213,8 +225,9 @@ test("Current Test renders the shared decoded PLC snapshot and configured value 
     "Error": { rawValue: 2, interpretedValue: "Fixture clamp low", valueMapMatched: true }
   }, "OK");
 
-  assert.equal(currentFields.get("currentQr").textContent, "QR-123");
-  assert.equal(currentFields.get("currentQr").disabled, false);
+  //code change by chatgpt
+  // assert.equal(currentFields.get("currentQr").textContent, "QR-123");
+  // assert.equal(currentFields.get("currentQr").disabled, false);
   assert.equal(currentFields.get("currentPartNo").textContent, "PART-50");
   assert.equal(currentFields.get("currentSerialNumber").textContent, "PLC-SN-123");
   assert.equal(currentFields.get("currentLeak").textContent, "0.1250");
@@ -227,7 +240,9 @@ test("Current Test renders the shared decoded PLC snapshot and configured value 
   context.renderCurrentPart(null, {
     "Time": { rawValue: "bad", interpretedValue: null, error: "undecodable" }
   });
-  assert.equal(currentFields.get("currentQr").textContent, "--");
+  //code change by chatgpt
+  // assert.equal(currentFields.get("currentQr").textContent, "--");
+  assert.equal(currentFields.get("currentPartNo").textContent, "--");
 });
 
 test("Leak Test Value displays four decimal places without changing its numeric meaning", () => {
@@ -331,10 +346,24 @@ test("desktop clears persistent WebView renderer caches before loading the HMI",
 });
 
 function extractFunction(name) {
+  //code change by chatgpt
+  // const start = source.indexOf(`function ${name}(`);
+  // assert.notEqual(start, -1, `function ${name} was not found in app.js`);
+  // const next = source.indexOf("\nfunction ", start + 1);
+  // return source.slice(start, next < 0 ? source.length : next);
+  const pattern = new RegExp(`^function ${name.replace(/[.*+?^\${}()|[\\]\\]/g, "\\function extractFunction(name) {
   const start = source.indexOf(`function ${name}(`);
   assert.notEqual(start, -1, `function ${name} was not found in app.js`);
   const next = source.indexOf("\nfunction ", start + 1);
   return source.slice(start, next < 0 ? source.length : next);
+}")}\\(`, "m");
+  const match = pattern.exec(source);
+  assert.notEqual(match, null, `function ${name} was not found in app.js`);
+  const start = match.index;
+  const remainder = source.slice(start + 1);
+  const nextMatch = /^function\s+[A-Za-z_$][\\w$]*\s*\(/m.exec(remainder);
+  const next = nextMatch ? start + 1 + nextMatch.index : source.length;
+  return source.slice(start, next);
 }
 
 function control(value = "") {
