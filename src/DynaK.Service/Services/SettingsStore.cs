@@ -15,6 +15,7 @@ public sealed class SettingsStore
         "Result Ready",
         "PLC Sequence / Cycle ID",
         "QR Code",
+        "QR Code Value",
         "Leak Lower Limit",
         "Leak Upper Limit",
         PlcSignalMapping.CombinedResultSignalName,
