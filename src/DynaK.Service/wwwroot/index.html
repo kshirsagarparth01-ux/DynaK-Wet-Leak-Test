@@ -66,7 +66,8 @@
           </div>
             <div class="part-grid">
             <div class="field"><label>SERIAL NO.</label><span id="currentSerialNumber">--</span></div>
-            <div class="field"><label>QR CODE</label><button class="link-value" id="currentQr" type="button">--</button></div>
+            <!-- //code change by chatgpt -->
+            <!-- <div class="field"><label>QR CODE</label><button class="link-value" id="currentQr" type="button">--</button></div> -->
             <div class="field"><label>PART NO.</label><span id="currentPartNo">--</span></div>
             <div class="field"><label>RESULT</label><span id="currentResult" class="result-chip neutral">--</span></div>
             <div class="leak-card">
@@ -74,8 +75,9 @@
               <!-- Changed using GPT -->
               <div><strong id="currentLeak">--</strong><span id="currentLeakUnit">LPM</span></div>
               <!-- <div><strong id="currentLeak">--</strong><span id="currentLeakUnit">bar</span></div> -->
-              <small>PLC SCANNED QR</small>
-              <code id="currentPlcQr">--</code>
+              <!-- //code change by chatgpt -->
+              <!-- <small>PLC SCANNED QR</small> -->
+              <!-- <code id="currentPlcQr">--</code> -->
             </div>
             <div class="field"><label>LEAK OK RANGE</label><span id="currentLeakRange">--</span></div>
             <div class="field"><label>MODE</label><span id="currentMode">--</span></div>
@@ -90,7 +92,9 @@
           </div>
           <div class="table-scroll">
             <table>
-              <thead><tr><th>TIME</th><th>SR NO.</th><th>QR CODE</th><th>PART NO.</th><th class="right">LEAK VALUE</th><th>LEAK OK RANGE</th><th>RESULT</th><th>MODE</th><th>ERROR</th></tr></thead>
+              <!-- //code change by chatgpt -->
+              <!-- <thead><tr><th>TIME</th><th>SR NO.</th><th>QR CODE</th><th>PART NO.</th><th class="right">LEAK VALUE</th><th>LEAK OK RANGE</th><th>RESULT</th><th>MODE</th><th>ERROR</th></tr></thead> -->
+              <thead><tr><th>TIME</th><th>SR NO.</th><th>PART NO.</th><th class="right">LEAK VALUE</th><th>LEAK OK RANGE</th><th>RESULT</th><th>MODE</th><th>ERROR</th></tr></thead>
               <tbody id="recentRows"></tbody>
             </table>
           </div>
@@ -123,7 +127,8 @@
             </label>
             <label>SHIFT <select name="shift"><option value="">ALL</option><option>SHIFT A</option><option>SHIFT B</option><option>SHIFT C</option></select></label>
             <label>PART NO. <input name="partNumber" autocomplete="off"></label>
-            <label>QR CODE <input name="qrCode" autocomplete="off"></label>
+            <!-- //code change by chatgpt -->
+            <!-- <label>QR CODE <input name="qrCode" autocomplete="off"></label> -->
             <label>RESULT <select name="result"><option value="">ALL</option><option>OK</option><option>NG</option><option>REWORK</option></select></label>
             <button type="submit">SEARCH</button>
           </form>
@@ -131,7 +136,9 @@
         <section class="section-block table-panel">
           <div class="table-scroll">
             <table>
-              <thead><tr><th>DATE</th><th>TIME</th><th>SR NO.</th><th>QR CODE</th><th>PART NO.</th><th class="right">LEAK VALUE</th><th>LEAK OK RANGE</th><th>RESULT</th><th>SHIFT</th><th>MODE</th><th>ERROR</th></tr></thead>
+              <!-- //code change by chatgpt -->
+              <!-- <thead><tr><th>DATE</th><th>TIME</th><th>SR NO.</th><th>QR CODE</th><th>PART NO.</th><th class="right">LEAK VALUE</th><th>LEAK OK RANGE</th><th>RESULT</th><th>SHIFT</th><th>MODE</th><th>ERROR</th></tr></thead> -->
+              <thead><tr><th>DATE</th><th>TIME</th><th>SR NO.</th><th>PART NO.</th><th class="right">LEAK VALUE</th><th>LEAK OK RANGE</th><th>RESULT</th><th>SHIFT</th><th>MODE</th><th>ERROR</th></tr></thead>
               <tbody id="historyRows"></tbody>
             </table>
           </div>
