@@ -1171,19 +1171,371 @@ await RunAsync("daily reports recover and roll over month year and canonical fil
     PartHistoryExcelExporter.ValidateWorkbook(await File.ReadAllBytesAsync(august23), 2);
 });
 
-await RunAsync("failed Data Saved acknowledgement does not block later local History rows", async () =>
+await RunAsync("Data Saved is written only after persistence and remains HIGH for about two seconds", async () =>
 {
-    await using var harness = await PartDataHarness.CreateAsync(enableDataSaved: true, failDataSavedWrites: true);
+    await using var harness = await PartDataHarness.CreateAsync(enableDataSaved: true);
     var settings = harness.Settings.Current;
 
-    harness.Plc.Enqueue(PartSnapshot(8201, "ACK100", "QR100", 0.100m));
-    await harness.Trigger.ProcessPollAsync(settings, PartDataReadySignals(true, "ACK100"), CancellationToken.None);
+    var databaseWasDurableBeforeHigh = false;
 
-    harness.Plc.Enqueue(PartSnapshot(8202, "ACK101", "QR101", 0.101m));
-    await harness.Trigger.ProcessPollAsync(settings, PartDataReadySignals(true, "ACK101"), CancellationToken.None);
+    harness.Plc.BeforeWriteAsync = async (signalName, value) =>
+    {
+        if (string.Equals(
+                signalName,
+                PlcSafety.DataSavedSignalName,
+                StringComparison.OrdinalIgnoreCase) &&
+            value is bool high &&
+            high)
+        {
+            databaseWasDurableBeforeHigh =
+                await harness.Records.CountAsync(CancellationToken.None) == 1;
+        }
+    };
 
-    AssertEqual(2, await harness.Records.CountAsync(CancellationToken.None));
-    AssertEqual(2, harness.Plc.SnapshotReadCount);
+    harness.Plc.Enqueue(
+        PartSnapshot(
+            8201,
+            "ACK100",
+            "QR100",
+            0.100m));
+
+    await harness.Trigger.ProcessPollAsync(
+        settings,
+        PartDataReadySignals(true, "ACK100"),
+        CancellationToken.None);
+
+    AssertTrue(
+        databaseWasDurableBeforeHigh,
+        "DATA SAVED HIGH must not be written before the production record is durable in SQLite.");
+
+    AssertEqual(
+        1,
+        await harness.Records.CountAsync(CancellationToken.None));
+
+    AssertEqual(1, harness.Plc.SnapshotReadCount);
+
+    var successfulDataSavedWrites = harness.Plc.WriteAttempts
+        .Where(write =>
+            write.Succeeded &&
+            string.Equals(
+                write.SignalName,
+                PlcSafety.DataSavedSignalName,
+                StringComparison.OrdinalIgnoreCase))
+        .ToList();
+
+    AssertEqual(2, successfulDataSavedWrites.Count);
+    AssertEqual(true, (bool)successfulDataSavedWrites[0].Value!);
+    AssertEqual(false, (bool)successfulDataSavedWrites[1].Value!);
+
+    var pulseDuration =
+        successfulDataSavedWrites[1].Timestamp -
+        successfulDataSavedWrites[0].Timestamp;
+
+    AssertTrue(
+        pulseDuration >= TimeSpan.FromMilliseconds(1800),
+        $"DATA SAVED pulse was too short: {pulseDuration.TotalMilliseconds:0} ms");
+
+    AssertTrue(
+        pulseDuration < TimeSpan.FromSeconds(4),
+        $"DATA SAVED pulse was unexpectedly long: {pulseDuration.TotalMilliseconds:0} ms");
+
+    AssertTrue(
+        !harness.Plc.WriteAttempts.Any(write =>
+            string.Equals(
+                write.SignalName,
+                PlcSignalMapping.PartDataReadySignalName,
+                StringComparison.OrdinalIgnoreCase)),
+        "The PC must never write Part Data Ready / D1075.");
+});
+
+await RunAsync("failed database insert does not acknowledge Data Saved", async () =>
+{
+    await using var harness = await PartDataHarness.CreateAsync(enableDataSaved: true);
+    var settings = harness.Settings.Current;
+
+    await using (var connection =
+        await harness.Database.OpenConnectionAsync(CancellationToken.None))
+    {
+        await SqliteDatabase.ExecuteAsync(
+            connection,
+            """
+            CREATE TRIGGER reject_d2110_test_insert
+            BEFORE INSERT ON production_records
+            BEGIN
+                SELECT RAISE(ABORT, 'forced persistence failure');
+            END;
+            """,
+            CancellationToken.None);
+    }
+
+    harness.Plc.Enqueue(
+        PartSnapshot(
+            8202,
+            "DBFAIL100",
+            "QR-DBFAIL100",
+            0.111m));
+
+    await harness.Trigger.ProcessPollAsync(
+        settings,
+        PartDataReadySignals(true, "DBFAIL100"),
+        CancellationToken.None);
+
+    AssertEqual(
+        0,
+        await harness.Records.CountAsync(CancellationToken.None));
+
+    AssertTrue(
+        !harness.Plc.WriteAttempts.Any(write =>
+            string.Equals(
+                write.SignalName,
+                PlcSafety.DataSavedSignalName,
+                StringComparison.OrdinalIgnoreCase)),
+        "DATA SAVED must not be written when the SQLite insert fails.");
+
+    await using (var connection =
+        await harness.Database.OpenConnectionAsync(CancellationToken.None))
+    {
+        await SqliteDatabase.ExecuteAsync(
+            connection,
+            "DROP TRIGGER reject_d2110_test_insert;",
+            CancellationToken.None);
+    }
+
+    await harness.Trigger.ProcessPollAsync(
+        settings,
+        PartDataReadySignals(true, "DBFAIL100"),
+        CancellationToken.None);
+
+    AssertEqual(
+        1,
+        await harness.Records.CountAsync(CancellationToken.None));
+
+    AssertEqual(
+        1,
+        harness.Plc.SnapshotReadCount);
+});
+
+await RunAsync("failed Data Saved acknowledgement retries without inserting a duplicate", async () =>
+{
+    await using var harness = await PartDataHarness.CreateAsync(enableDataSaved: true);
+    var settings = harness.Settings.Current;
+
+    harness.Plc.EnqueueDataSavedWriteFailure(true);
+
+    harness.Plc.Enqueue(
+        PartSnapshot(
+            8203,
+            "ACK-RETRY-100",
+            "QR-ACK-RETRY-100",
+            0.120m));
+
+    await harness.Trigger.ProcessPollAsync(
+        settings,
+        PartDataReadySignals(true, "ACK-RETRY-100"),
+        CancellationToken.None);
+
+    AssertEqual(
+        1,
+        await harness.Records.CountAsync(CancellationToken.None));
+
+    AssertEqual(
+        1,
+        harness.Plc.SnapshotReadCount);
+
+    for (var poll = 0; poll < 3; poll++)
+    {
+        await harness.Trigger.ProcessPollAsync(
+            settings,
+            PartDataReadySignals(true, "ACK-RETRY-100"),
+            CancellationToken.None);
+    }
+
+    AssertEqual(
+        1,
+        await harness.Records.CountAsync(CancellationToken.None));
+
+    AssertEqual(
+        1,
+        harness.Plc.SnapshotReadCount);
+
+    await Task.Delay(TimeSpan.FromMilliseconds(5200));
+
+    await harness.Trigger.ProcessPollAsync(
+        settings,
+        PartDataReadySignals(true, "ACK-RETRY-100"),
+        CancellationToken.None);
+
+    AssertEqual(
+        1,
+        await harness.Records.CountAsync(CancellationToken.None));
+
+    AssertEqual(
+        1,
+        harness.Plc.SnapshotReadCount);
+
+    var dataSavedAttempts = harness.Plc.WriteAttempts
+        .Where(write =>
+            string.Equals(
+                write.SignalName,
+                PlcSafety.DataSavedSignalName,
+                StringComparison.OrdinalIgnoreCase))
+        .ToList();
+
+    AssertEqual(3, dataSavedAttempts.Count);
+
+    AssertEqual(true, (bool)dataSavedAttempts[0].Value!);
+    AssertTrue(
+        !dataSavedAttempts[0].Succeeded,
+        "first DATA SAVED HIGH should have been the simulated failure");
+
+    AssertEqual(true, (bool)dataSavedAttempts[1].Value!);
+    AssertTrue(
+        dataSavedAttempts[1].Succeeded,
+        "retried DATA SAVED HIGH should succeed");
+
+    AssertEqual(false, (bool)dataSavedAttempts[2].Value!);
+    AssertTrue(
+        dataSavedAttempts[2].Succeeded,
+        "retried DATA SAVED LOW should succeed");
+
+    AssertTrue(
+        !harness.Plc.WriteAttempts.Any(write =>
+            string.Equals(
+                write.SignalName,
+                PlcSignalMapping.PartDataReadySignalName,
+                StringComparison.OrdinalIgnoreCase)),
+        "D1075 must remain PLC-owned and read-only.");
+});
+
+await RunAsync("failed Data Saved LOW is recovered without generating another HIGH pulse", async () =>
+{
+    await using var harness = await PartDataHarness.CreateAsync(enableDataSaved: true);
+
+    harness.Plc.EnqueueDataSavedWriteFailure(false);
+    harness.Plc.EnqueueDataSavedWriteFailure(true);
+
+    var firstAttempt =
+        await harness.Handshake.PulseDataSavedAsync(
+            CancellationToken.None);
+
+    AssertTrue(
+        !firstAttempt,
+        "pulse must not report success when the LOW write fails");
+
+    var firstAttempts = harness.Plc.WriteAttempts
+        .Where(write =>
+            string.Equals(
+                write.SignalName,
+                PlcSafety.DataSavedSignalName,
+                StringComparison.OrdinalIgnoreCase))
+        .ToList();
+
+    AssertEqual(2, firstAttempts.Count);
+    AssertEqual(true, (bool)firstAttempts[0].Value!);
+    AssertEqual(false, (bool)firstAttempts[1].Value!);
+    AssertTrue(firstAttempts[0].Succeeded, "HIGH should succeed");
+    AssertTrue(!firstAttempts[1].Succeeded, "LOW should fail");
+
+    harness.Plc.EnqueueDataSavedWriteFailure(false);
+
+    await harness.Handshake.SetDataSavedLowAsync(
+        CancellationToken.None);
+
+    var writesAfterRecoveryLow = harness.Plc.WriteAttempts.Count;
+
+    var recovered =
+        await harness.Handshake.PulseDataSavedAsync(
+            CancellationToken.None);
+
+    AssertTrue(
+        recovered,
+        "recovered acknowledgement should complete successfully");
+
+    AssertEqual(
+        writesAfterRecoveryLow,
+        harness.Plc.WriteAttempts.Count);
+
+    var dataSavedAttempts = harness.Plc.WriteAttempts
+        .Where(write =>
+            string.Equals(
+                write.SignalName,
+                PlcSafety.DataSavedSignalName,
+                StringComparison.OrdinalIgnoreCase))
+        .ToList();
+
+    AssertEqual(3, dataSavedAttempts.Count);
+    AssertEqual(true, (bool)dataSavedAttempts[0].Value!);
+    AssertEqual(false, (bool)dataSavedAttempts[1].Value!);
+    AssertEqual(false, (bool)dataSavedAttempts[2].Value!);
+
+    AssertEqual(
+        1,
+        dataSavedAttempts.Count(write =>
+            write.Value is bool value && value));
+});
+
+await RunAsync("session recovery with D1075 already HIGH acknowledges existing record without duplicate insert", async () =>
+{
+    await using var harness = await PartDataHarness.CreateAsync(enableDataSaved: true);
+    var settings = harness.Settings.Current;
+
+    harness.Plc.Enqueue(
+        PartSnapshot(
+            8204,
+            "SESSION-ACK-100",
+            "QR-SESSION-ACK-100",
+            0.130m));
+
+    await harness.Trigger.ProcessPollAsync(
+        settings,
+        PartDataReadySignals(true, "SESSION-ACK-100"),
+        CancellationToken.None);
+
+    AssertEqual(
+        1,
+        await harness.Records.CountAsync(CancellationToken.None));
+
+    AssertEqual(
+        1,
+        harness.Plc.SnapshotReadCount);
+
+    harness.Plc.ClearWriteAttempts();
+
+    harness.Trigger.ResetSession();
+
+    await harness.Trigger.ProcessPollAsync(
+        settings,
+        PartDataReadySignals(true, "SESSION-ACK-100"),
+        CancellationToken.None);
+
+    AssertEqual(
+        1,
+        await harness.Records.CountAsync(CancellationToken.None));
+
+    AssertEqual(
+        1,
+        harness.Plc.SnapshotReadCount);
+
+    var recoveryWrites = harness.Plc.WriteAttempts
+        .Where(write =>
+            write.Succeeded &&
+            string.Equals(
+                write.SignalName,
+                PlcSafety.DataSavedSignalName,
+                StringComparison.OrdinalIgnoreCase))
+        .ToList();
+
+    AssertEqual(2, recoveryWrites.Count);
+    AssertEqual(true, (bool)recoveryWrites[0].Value!);
+    AssertEqual(false, (bool)recoveryWrites[1].Value!);
+
+    AssertTrue(
+        !harness.Plc.WriteAttempts.Any(write =>
+            string.Equals(
+                write.SignalName,
+                PlcSignalMapping.PartDataReadySignalName,
+                StringComparison.OrdinalIgnoreCase)),
+        "session recovery must never write D1075");
 });
 
 await RunAsync("production acquisition saves new Part Numbers once while D1075 remains HIGH and retries failed inserts", async () =>
@@ -1247,7 +1599,35 @@ await RunAsync("production acquisition saves new Part Numbers once while D1075 r
     AssertEqual((ushort)0, server.Registers[2121]);
 
     await WaitUntilAsync(() => records.CountAsync(CancellationToken.None).GetAwaiter().GetResult() == 1, TimeSpan.FromSeconds(5), "PART001 was not saved immediately from the first D1075=1 poll");
-    await WaitUntilAsync(() => server.Registers.TryGetValue(2122, out var dataSaved) && dataSaved == 0, TimeSpan.FromSeconds(5), "configured DATA SAVED did not pulse ON after the complete database and text-file writes");
+    await WaitUntilAsync(
+        () => server.ObservedWriteValues.Any(write =>
+            write.Start == 2122 &&
+            write.Value == 0),
+        TimeSpan.FromSeconds(5),
+        "configured DATA SAVED mapping D2122 did not receive ON");
+
+    await WaitUntilAsync(
+        () => server.ObservedWriteValues.Any(write =>
+            write.Start == 2122 &&
+            write.Value == 1),
+        TimeSpan.FromSeconds(5),
+        "configured DATA SAVED mapping D2122 did not return OFF");
+
+    AssertEqual(
+        (ushort)1,
+        server.Registers[2122]);
+
+    AssertEqual(
+        1,
+        server.ObservedWriteValues.Count(write =>
+            write.Start == 2122 &&
+            write.Value == 0));
+
+    AssertEqual(
+        1,
+        server.ObservedWriteValues.Count(write =>
+            write.Start == 2122 &&
+            write.Value == 1));
     AssertEqual(1, await records.CountLogicalPartsAsync(CancellationToken.None));
     AssertEqual("0.327", await File.ReadAllTextAsync(liveLeakValuePath));
     var part1 = (await records.QueryAsync(new ProductionRecordQuery(null, null, null, "PART001", null, null), CancellationToken.None)).Single();
@@ -1264,8 +1644,6 @@ await RunAsync("production acquisition saves new Part Numbers once while D1075 r
     AssertEqual(1, await records.CountAsync(CancellationToken.None));
     AssertEqual("PART001", (await records.GetByIdAsync(part1.Id, CancellationToken.None))!.PartNumber);
 
-    await WaitUntilAsync(() => server.Registers.TryGetValue(2122, out var dataSaved) && dataSaved == 1, TimeSpan.FromSeconds(5), "configured DATA SAVED did not return OFF");
-    AssertEqual(1, server.ObservedWriteValues.Count(write => write.Start == 2122 && write.Value == 0));
 
     server.Registers[2005] = 2;
     server.Registers[1010] = 1;
@@ -1274,7 +1652,19 @@ await RunAsync("production acquisition saves new Part Numbers once while D1075 r
     AddAsciiRegisters(server.Registers, 2050, "QR002", 10);
     AddAsciiRegisters(server.Registers, 2060, "PART002", 10);
     await WaitUntilAsync(() => records.CountAsync(CancellationToken.None).GetAwaiter().GetResult() == 2, TimeSpan.FromSeconds(5), "PART002 was not saved after Part Number changed while D1075 stayed HIGH");
-    await WaitUntilAsync(() => server.ObservedWriteValues.Count(write => write.Start == 2122 && write.Value == 0) == 2, TimeSpan.FromSeconds(5), "PART002 DATA SAVED pulse was not emitted");
+    await WaitUntilAsync(
+        () => server.ObservedWriteValues.Count(write =>
+            write.Start == 2122 &&
+            write.Value == 0) == 2,
+        TimeSpan.FromSeconds(5),
+        "PART002 DATA SAVED ON was not emitted");
+
+    await WaitUntilAsync(
+        () => server.ObservedWriteValues.Count(write =>
+            write.Start == 2122 &&
+            write.Value == 1) == 2,
+        TimeSpan.FromSeconds(5),
+        "PART002 DATA SAVED did not return OFF");
     AssertEqual("0.111", await File.ReadAllTextAsync(liveLeakValuePath));
     var savedParts = await records.QueryAsync(new ProductionRecordQuery(null, null, null, null, null, null), CancellationToken.None);
     AssertEqual(2, savedParts.Count);
@@ -1292,7 +1682,15 @@ await RunAsync("production acquisition saves new Part Numbers once while D1075 r
     {
         await SqliteDatabase.ExecuteAsync(connection, "CREATE TRIGGER reject_production_insert BEFORE INSERT ON production_records BEGIN SELECT RAISE(ABORT, 'forced persistence failure'); END;", CancellationToken.None);
     }
-    var pulsesBeforeFailure = server.ObservedWriteValues.Count(write => write.Start == 2122 && write.Value == 0);
+    var pulsesBeforeFailure =
+        server.ObservedWriteValues.Count(write =>
+            write.Start == 2122 &&
+            write.Value == 0);
+
+    var clearsBeforeFailure =
+        server.ObservedWriteValues.Count(write =>
+            write.Start == 2122 &&
+            write.Value == 1);
     server.Registers[2005] = 3;
     AddAsciiRegisters(server.Registers, 2025, "0.222", 5);
     AddAsciiRegisters(server.Registers, 2050, "QR003", 10);
@@ -1311,6 +1709,20 @@ await RunAsync("production acquisition saves new Part Numbers once while D1075 r
     }
     await WaitUntilAsync(() => records.CountAsync(CancellationToken.None).GetAwaiter().GetResult() == 3, TimeSpan.FromSeconds(5), "PART003 database insert was not retried after D1075 returned LOW");
     AssertEqual("PART003", (await records.QueryAsync(new ProductionRecordQuery(null, null, null, "PART003", null, null), CancellationToken.None)).Single().PartNumber);
+
+    await WaitUntilAsync(
+        () => server.ObservedWriteValues.Count(write =>
+            write.Start == 2122 &&
+            write.Value == 0) == pulsesBeforeFailure + 1,
+        TimeSpan.FromSeconds(5),
+        "PART003 DATA SAVED ON was not emitted after successful retry");
+
+    await WaitUntilAsync(
+        () => server.ObservedWriteValues.Count(write =>
+            write.Start == 2122 &&
+            write.Value == 1) == clearsBeforeFailure + 1,
+        TimeSpan.FromSeconds(5),
+        "PART003 DATA SAVED did not return OFF after successful retry");
 
     using var stopTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
     await runtime.RequestStopAsync(stopTimeout.Token);
@@ -1900,12 +2312,14 @@ internal sealed class PartDataHarness : IAsyncDisposable
 
     private PartDataHarness(
         SettingsStore settings,
+        SqliteDatabase database,
         ProductionRepository records,
         TestPlcClient plc,
         PlcHandshakeService handshake,
         PartDataReadyService trigger)
     {
         Settings = settings;
+        Database = database;
         Records = records;
         Plc = plc;
         _handshake = handshake;
@@ -1913,30 +2327,75 @@ internal sealed class PartDataHarness : IAsyncDisposable
     }
 
     public SettingsStore Settings { get; }
+    public SqliteDatabase Database { get; }
     public ProductionRepository Records { get; }
     public TestPlcClient Plc { get; }
+    public PlcHandshakeService Handshake => _handshake;
     public PartDataReadyService Trigger { get; }
 
-    public static async Task<PartDataHarness> CreateAsync(bool enableDataSaved = false, bool failDataSavedWrites = false)
+    public static async Task<PartDataHarness> CreateAsync(
+        bool enableDataSaved = false,
+        bool failDataSavedWrites = false)
     {
-        var root = Path.Combine(Path.GetTempPath(), $"dynak-part-data-{Guid.NewGuid():N}");
+        var root = Path.Combine(
+            Path.GetTempPath(),
+            $"dynak-part-data-{Guid.NewGuid():N}");
+
         var settings = new AppSettings
         {
             DatabasePath = Path.Combine(root, "station.db"),
-            LiveLeakValueFilePath = Path.Combine(root, "live_leak_value.txt"),
+            LiveLeakValueFilePath = Path.Combine(
+                root,
+                "live_leak_value.txt"),
             SignalMappings = PlcSignalMapping.CreateDefaults()
         };
-        settings.SignalMappings.First(mapping => mapping.SignalName == PlcSafety.DataSavedSignalName).Enabled = enableDataSaved;
-        var store = new SettingsStore(Options.Create(settings), NullLogger<SettingsStore>.Instance);
-        var database = new SqliteDatabase(store, NullLogger<SqliteDatabase>.Instance);
-        await database.InitializeAsync(CancellationToken.None);
+
+        settings.SignalMappings
+            .First(mapping =>
+                mapping.SignalName == PlcSafety.DataSavedSignalName)
+            .Enabled = enableDataSaved;
+
+        var store = new SettingsStore(
+            Options.Create(settings),
+            NullLogger<SettingsStore>.Instance);
+
+        var database = new SqliteDatabase(
+            store,
+            NullLogger<SqliteDatabase>.Instance);
+
+        await database.InitializeAsync(
+            CancellationToken.None);
+
         var records = new ProductionRepository(database);
         var events = new EventRepository(database);
         var acquisition = new AcquisitionState();
-        var plc = new TestPlcClient { FailWrites = failDataSavedWrites };
-        var handshake = new PlcHandshakeService(plc, store, NullLogger<PlcHandshakeService>.Instance);
-        var trigger = new PartDataReadyService(records, events, acquisition, handshake, new LiveLeakValueFileWriter(), plc, NullLogger<PartDataReadyService>.Instance);
-        return new PartDataHarness(store, records, plc, handshake, trigger);
+
+        var plc = new TestPlcClient
+        {
+            FailWrites = failDataSavedWrites
+        };
+
+        var handshake = new PlcHandshakeService(
+            plc,
+            store,
+            NullLogger<PlcHandshakeService>.Instance);
+
+        var trigger = new PartDataReadyService(
+            records,
+            events,
+            acquisition,
+            handshake,
+            new LiveLeakValueFileWriter(),
+            plc,
+            NullLogger<PartDataReadyService>.Instance);
+
+        return new PartDataHarness(
+            store,
+            database,
+            records,
+            plc,
+            handshake,
+            trigger);
     }
 
     public async ValueTask DisposeAsync()
@@ -1946,31 +2405,119 @@ internal sealed class PartDataHarness : IAsyncDisposable
     }
 }
 
+internal sealed record TestPlcWrite(
+    string SignalName,
+    object? Value,
+    DateTimeOffset Timestamp,
+    bool Succeeded);
+
 internal sealed class TestPlcClient : IPlcClient
 {
     private readonly Queue<PartDataSnapshot?> _snapshots = new();
+    private readonly Queue<bool> _dataSavedWriteFailures = new();
+    private readonly List<TestPlcWrite> _writeAttempts = [];
 
-    public bool FailWrites { get; init; }
+    public bool FailWrites { get; set; }
+
     public int SnapshotReadCount { get; private set; }
 
-    public void Enqueue(PartDataSnapshot? snapshot) => _snapshots.Enqueue(snapshot);
+    public IReadOnlyList<TestPlcWrite> WriteAttempts =>
+        _writeAttempts;
 
-    public Task ConnectAsync(PlcClientConfiguration configuration, CancellationToken cancellationToken) => Task.CompletedTask;
-    public Task DisconnectAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-    public Task<bool> IsConnectedAsync(CancellationToken cancellationToken) => Task.FromResult(true);
-    public Task<PlcPollResult> ReadPollAsync(CancellationToken cancellationToken) => throw new NotSupportedException();
-    public Task<PlcMachineStatus> ReadMachineStatusAsync(CancellationToken cancellationToken) =>
-        Task.FromResult(new PlcMachineStatus(true, false, null, null, DateTimeOffset.Now));
-    public Task<IReadOnlyDictionary<string, PlcSignalValue>> ReadConfiguredSignalsAsync(CancellationToken cancellationToken) =>
-        Task.FromResult<IReadOnlyDictionary<string, PlcSignalValue>>(new Dictionary<string, PlcSignalValue>());
-    public Task<PartDataSnapshot?> ReadPartDataSnapshotAsync(CancellationToken cancellationToken)
+    public Func<string, object?, Task>? BeforeWriteAsync { get; set; }
+
+    public void Enqueue(PartDataSnapshot? snapshot) =>
+        _snapshots.Enqueue(snapshot);
+
+    public void EnqueueDataSavedWriteFailure(bool shouldFail) =>
+        _dataSavedWriteFailures.Enqueue(shouldFail);
+
+    public void ClearWriteAttempts() =>
+        _writeAttempts.Clear();
+
+    public Task ConnectAsync(
+        PlcClientConfiguration configuration,
+        CancellationToken cancellationToken) =>
+        Task.CompletedTask;
+
+    public Task DisconnectAsync(
+        CancellationToken cancellationToken) =>
+        Task.CompletedTask;
+
+    public Task<bool> IsConnectedAsync(
+        CancellationToken cancellationToken) =>
+        Task.FromResult(true);
+
+    public Task<PlcPollResult> ReadPollAsync(
+        CancellationToken cancellationToken) =>
+        throw new NotSupportedException();
+
+    public Task<PlcMachineStatus> ReadMachineStatusAsync(
+        CancellationToken cancellationToken) =>
+        Task.FromResult(
+            new PlcMachineStatus(
+                true,
+                false,
+                null,
+                null,
+                DateTimeOffset.Now));
+
+    public Task<IReadOnlyDictionary<string, PlcSignalValue>>
+        ReadConfiguredSignalsAsync(
+            CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyDictionary<string, PlcSignalValue>>(
+            new Dictionary<string, PlcSignalValue>());
+
+    public Task<PartDataSnapshot?> ReadPartDataSnapshotAsync(
+        CancellationToken cancellationToken)
     {
         SnapshotReadCount++;
-        return Task.FromResult(_snapshots.Count == 0 ? null : _snapshots.Dequeue());
+
+        return Task.FromResult(
+            _snapshots.Count == 0
+                ? null
+                : _snapshots.Dequeue());
     }
-    public Task WriteConfiguredSignalAsync(string signalName, object? value, CancellationToken cancellationToken) =>
-        FailWrites ? Task.FromException(new IOException("Simulated PLC handshake rejection.")) : Task.CompletedTask;
-    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+
+    public async Task WriteConfiguredSignalAsync(
+        string signalName,
+        object? value,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (BeforeWriteAsync is not null)
+        {
+            await BeforeWriteAsync(signalName, value);
+        }
+
+        var isDataSaved = string.Equals(
+            signalName,
+            PlcSafety.DataSavedSignalName,
+            StringComparison.OrdinalIgnoreCase);
+
+        var shouldFail =
+            isDataSaved &&
+            (_dataSavedWriteFailures.Count > 0
+                ? _dataSavedWriteFailures.Dequeue()
+                : FailWrites);
+
+        _writeAttempts.Add(
+            new TestPlcWrite(
+                signalName,
+                value,
+                DateTimeOffset.UtcNow,
+                !shouldFail));
+
+        if (shouldFail)
+        {
+            throw new IOException(
+                "Simulated PLC handshake rejection.");
+        }
+    }
+
+    public ValueTask DisposeAsync() =>
+        ValueTask.CompletedTask;
 }
 
 internal sealed class ModbusTestServer : IAsyncDisposable
