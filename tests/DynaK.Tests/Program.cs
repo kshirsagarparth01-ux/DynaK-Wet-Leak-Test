@@ -1256,7 +1256,9 @@ await RunAsync("failed Data Saved acknowledgement does not block later local His
 
 await RunAsync("production acquisition saves new Part Numbers once while D1075 remains HIGH and retries failed inserts", async () =>
 {
-    await using var server = await ModbusTestServer.StartAsync(ProductionRegisters(actual: 1, leak: "0.327", qrCode: "QR001", partNumber: "PART001", partDataReady: 1));
+    //code change by chatgpt
+    // await using var server = await ModbusTestServer.StartAsync(ProductionRegisters(actual: 1, leak: "0.327", qrCode: "QR001", partNumber: "PART001", partDataReady: 1));
+    await using var server = await ModbusTestServer.StartAsync(ProductionRegisters(actual: 1, leak: "0.327", partNumber: "PART001", partDataReady: 1));
     var testRoot = Path.Combine(Path.GetTempPath(), $"dynak-part-data-ready-{Guid.NewGuid():N}");
     var temp = Path.Combine(testRoot, "station.db");
     var liveLeakValuePath = Path.Combine(testRoot, "live_leak_value.txt");
@@ -1318,18 +1320,20 @@ await RunAsync("production acquisition saves new Part Numbers once while D1075 r
     await WaitUntilAsync(() => server.Registers.TryGetValue(2122, out var dataSaved) && dataSaved == 0, TimeSpan.FromSeconds(5), "configured DATA SAVED did not pulse ON after the complete database and text-file writes");
     AssertEqual(1, await records.CountLogicalPartsAsync(CancellationToken.None));
     AssertEqual("0.327", await File.ReadAllTextAsync(liveLeakValuePath));
-    var part1 = (await records.QueryAsync(//code change by chatgpt
-        // new ProductionRecordQuery(null, null, null, "PART001", null, null)
-        new ProductionRecordQuery(null, null, null, "PART001", null), CancellationToken.None)).Single();
+    //code change by chatgpt
+    // var part1 = (await records.QueryAsync(new ProductionRecordQuery(null, null, null, "PART001", null, null), CancellationToken.None)).Single();
+    var part1 = (await records.QueryAsync(new ProductionRecordQuery(null, null, null, "PART001", null), CancellationToken.None)).Single();
     AssertEqual("PART001", part1.PartNumber);
-    AssertEqual("QR001", part1.QrCode);
+    //code change by chatgpt
+    // AssertEqual("QR001", part1.QrCode);
     AssertEqual(0.327m, part1.LeakTestValue);
     AssertTrue(part1.PlcSnapshotJson.Contains("Part Data Ready", StringComparison.Ordinal), part1.PlcSnapshotJson);
     AssertTrue(server.ObservedReadRanges.Any(read => read.Start == 1075 && read.Count == 1), "D1075 did not resolve to zero-based Modbus holding-register address 1075 with offset 0");
     AssertTrue(!server.ObservedWriteValues.Any(write => write.Start == 1075), "the PC must never write HIGH or LOW to D1075");
 
     server.Registers[2005] = 7;
-    AddAsciiRegisters(server.Registers, 2050, "QR-CHANGED", 10);
+    //code change by chatgpt
+    // AddAsciiRegisters(server.Registers, 2050, "QR-CHANGED", 10);
     await Task.Delay(400);
     AssertEqual(1, await records.CountAsync(CancellationToken.None));
     AssertEqual("PART001", (await records.GetByIdAsync(part1.Id, CancellationToken.None))!.PartNumber);
@@ -1341,19 +1345,21 @@ await RunAsync("production acquisition saves new Part Numbers once while D1075 r
     server.Registers[1010] = 1;
     server.Registers[1011] = 0;
     AddAsciiRegisters(server.Registers, 2025, "0.111", 5);
-    AddAsciiRegisters(server.Registers, 2050, "QR002", 10);
+    //code change by chatgpt
+    // AddAsciiRegisters(server.Registers, 2050, "QR002", 10);
     AddAsciiRegisters(server.Registers, 2060, "PART002", 10);
     await WaitUntilAsync(() => records.CountAsync(CancellationToken.None).GetAwaiter().GetResult() == 2, TimeSpan.FromSeconds(5), "PART002 was not saved after Part Number changed while D1075 stayed HIGH");
     await WaitUntilAsync(() => server.ObservedWriteValues.Count(write => write.Start == 2122 && write.Value == 0) == 2, TimeSpan.FromSeconds(5), "PART002 DATA SAVED pulse was not emitted");
     AssertEqual("0.111", await File.ReadAllTextAsync(liveLeakValuePath));
-    var savedParts = await records.QueryAsync(//code change by chatgpt
-        // new ProductionRecordQuery(null, null, null, null, null, null)
-        new ProductionRecordQuery(null, null, null, null, null), CancellationToken.None);
+    //code change by chatgpt
+    // var savedParts = await records.QueryAsync(new ProductionRecordQuery(null, null, null, null, null, null), CancellationToken.None);
+    var savedParts = await records.QueryAsync(new ProductionRecordQuery(null, null, null, null, null), CancellationToken.None);
     AssertEqual(2, savedParts.Count);
     AssertEqual(0.327m, savedParts.Single(record => record.PartNumber == "PART001").LeakTestValue);
-    AssertEqual("QR001", savedParts.Single(record => record.PartNumber == "PART001").QrCode);
+    //code change by chatgpt
+    // AssertEqual("QR001", savedParts.Single(record => record.PartNumber == "PART001").QrCode);
     AssertEqual(0.111m, savedParts.Single(record => record.PartNumber == "PART002").LeakTestValue);
-    AssertEqual("QR002", savedParts.Single(record => record.PartNumber == "PART002").QrCode);
+    // AssertEqual("QR002", savedParts.Single(record => record.PartNumber == "PART002").QrCode);
     AssertTrue(!server.ObservedWriteValues.Any(write => write.Start == 1075), "D1075 must remain read-only across all pulses");
 
     server.DropConnection();
@@ -1367,7 +1373,8 @@ await RunAsync("production acquisition saves new Part Numbers once while D1075 r
     var pulsesBeforeFailure = server.ObservedWriteValues.Count(write => write.Start == 2122 && write.Value == 0);
     server.Registers[2005] = 3;
     AddAsciiRegisters(server.Registers, 2025, "0.222", 5);
-    AddAsciiRegisters(server.Registers, 2050, "QR003", 10);
+    //code change by chatgpt
+    // AddAsciiRegisters(server.Registers, 2050, "QR003", 10);
     AddAsciiRegisters(server.Registers, 2060, "PART003", 10);
     await WaitUntilAsync(() => partDataReady.State == PartDataReadyState.SAVING, TimeSpan.FromSeconds(3), "PART003 insert failure did not enter retry state");
     await Task.Delay(600);
@@ -1382,9 +1389,9 @@ await RunAsync("production acquisition saves new Part Numbers once while D1075 r
         await SqliteDatabase.ExecuteAsync(connection, "DROP TRIGGER reject_production_insert;", CancellationToken.None);
     }
     await WaitUntilAsync(() => records.CountAsync(CancellationToken.None).GetAwaiter().GetResult() == 3, TimeSpan.FromSeconds(5), "PART003 database insert was not retried after D1075 returned LOW");
-    AssertEqual("PART003", (await records.QueryAsync(//code change by chatgpt
-        // new ProductionRecordQuery(null, null, null, "PART003", null, null)
-        new ProductionRecordQuery(null, null, null, "PART003", null), CancellationToken.None)).Single().PartNumber);
+    //code change by chatgpt
+    // AssertEqual("PART003", (await records.QueryAsync(new ProductionRecordQuery(null, null, null, "PART003", null, null), CancellationToken.None)).Single().PartNumber);
+    AssertEqual("PART003", (await records.QueryAsync(new ProductionRecordQuery(null, null, null, "PART003", null), CancellationToken.None)).Single().PartNumber);
 
     using var stopTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
     await runtime.RequestStopAsync(stopTimeout.Token);
@@ -1447,7 +1454,8 @@ await RunAsync("Modbus client reads D registers and only writes handshake allow-
     await client.WriteConfiguredSignalAsync("Communication OK", true, CancellationToken.None);
     await client.WriteConfiguredSignalAsync(PlcSafety.DataSavedSignalName, true, CancellationToken.None);
 
-    AssertEqual("QR-123", snapshot.QrCode);
+    //code change by chatgpt
+    // AssertEqual("QR-123", snapshot.QrCode);
     AssertEqual("PN-999", snapshot.PartNumber);
     AssertEqual("PLC-SERIAL-009", snapshot.SerialNumber);
     AssertEqual(450, snapshot.TargetPartsPerShift);
@@ -1470,11 +1478,13 @@ await RunAsync("Modbus client reads D registers and only writes handshake allow-
     await AssertThrowsAsync<PlcWriteBlockedException>(() => client.WriteConfiguredSignalAsync(PlcSignalMapping.PartDataReadySignalName, true, CancellationToken.None));
     AssertTrue(!server.ObservedWriteValues.Any(write => write.Start == 1075), "D1075 must never receive a PLC write frame");
 
-    AddAsciiRegisters(server.Registers, 2050, "0", 10);
+    //code change by chatgpt
+    // AddAsciiRegisters(server.Registers, 2050, "0", 10);
     AddAsciiRegisters(server.Registers, 2060, "0", 10);
     var zeroValueSnapshot = await client.ReadPartDataSnapshotAsync(CancellationToken.None) ??
-        throw new InvalidOperationException("D1075 snapshots must not be rejected based on QR Code or Part Number values");
-    AssertEqual("0", zeroValueSnapshot.QrCode);
+        // throw new InvalidOperationException("D1075 snapshots must not be rejected based on QR Code or Part Number values");
+        throw new InvalidOperationException("D1075 snapshots must not be rejected based on Part Number values");
+    // AssertEqual("0", zeroValueSnapshot.QrCode);
     AssertEqual("0", zeroValueSnapshot.PartNumber);
 
     await client.DisconnectAsync(CancellationToken.None);
@@ -1569,7 +1579,9 @@ await RunAsync("Modbus failed and partial multi-register reads are rejected", as
     }), CancellationToken.None);
     await AssertThrowsAsync<IOException>(() => failedClient.ReadPartDataSnapshotAsync(CancellationToken.None));
 
-    await using var partialServer = await ModbusTestServer.StartAsync(ProductionRegisters(), partialReadStarts: [2050]);
+    //code change by chatgpt
+    // await using var partialServer = await ModbusTestServer.StartAsync(ProductionRegisters(), partialReadStarts: [2050]);
+    await using var partialServer = await ModbusTestServer.StartAsync(ProductionRegisters(), partialReadStarts: [2060]);
     await using var partialClient = new MitsubishiModbusPlcClient();
     await partialClient.ConnectAsync(PlcClientConfiguration.From(new AppSettings
     {
@@ -1589,7 +1601,8 @@ await RunAsync("unknown PLC enum values are stored as raw values with unknown me
         mode: 8,
         error: 7,
         running: 6,
-        qrCode: "QR-UNK",
+        //code change by chatgpt
+        // qrCode: "QR-UNK",
         partNumber: "PN-UNK"));
     await using var client = new MitsubishiModbusPlcClient();
 
@@ -1721,7 +1734,8 @@ static Dictionary<int, ushort> ProductionRegisters(
     ushort mode = 1,
     ushort error = 0,
     ushort running = 1,
-    string qrCode = "QR-123",
+    //code change by chatgpt
+    // string qrCode = "QR-123",
     string partNumber = "PN-999",
     ushort partDataReady = 0)
 {
@@ -1743,7 +1757,8 @@ static Dictionary<int, ushort> ProductionRegisters(
     registers[1021] = (ushort)parsedTime.Minute;
     registers[1022] = (ushort)parsedTime.Second;
     AddAsciiRegisters(registers, 2025, leak, 5);
-    AddAsciiRegisters(registers, 2050, qrCode, 10);
+    //code change by chatgpt
+    // AddAsciiRegisters(registers, 2050, qrCode, 10);
     AddAsciiRegisters(registers, 2060, partNumber, 10);
     return registers;
 }
@@ -1801,7 +1816,8 @@ static ProductionRecord SampleRecord(long sequenceId = 1001, DateTimeOffset? tim
         "TEST-STATION",
         sequenceId,
         null,
-        $"DYNTEST{sequenceId}",
+        //code change by chatgpt
+        // $"DYNTEST{sequenceId}",
         "78654-A01",
         DateOnly.FromDateTime(now.DateTime),
         TimeOnly.FromDateTime(now.DateTime),
@@ -1918,10 +1934,17 @@ static IReadOnlyDictionary<string, PlcSignalValue> PartDataReadySignals(bool hig
     return signals;
 }
 
+//code change by chatgpt
+// static PartDataSnapshot PartSnapshot(
+//     long sequenceId,
+//     string partNumber,
+//     string qrCode,
+//     decimal? leakValue,
+//     string? serialNumber = null,
+//     decimal upperLimit = 0.500m)
 static PartDataSnapshot PartSnapshot(
     long sequenceId,
     string partNumber,
-    string qrCode,
     decimal? leakValue,
     string? serialNumber = null,
     decimal upperLimit = 0.500m)
@@ -1930,7 +1953,8 @@ static PartDataSnapshot PartSnapshot(
     var signals = new Dictionary<string, PlcSignalValue>(StringComparer.OrdinalIgnoreCase)
     {
         ["Part Number"] = new PlcSignalValue(partNumber, partNumber, false),
-        ["QR Code Value"] = new PlcSignalValue(qrCode, qrCode, false),
+        //code change by chatgpt
+        // ["QR Code Value"] = new PlcSignalValue(qrCode, qrCode, false),
         ["Leak Test Value"] = new PlcSignalValue(leakValue, leakValue, false),
         ["Custom Production Value"] = new PlcSignalValue(42, "customProductionValue", false),
         [PlcSignalMapping.PartDataReadySignalName] = new PlcSignalValue(1, "HIGH", true)
@@ -1938,7 +1962,8 @@ static PartDataSnapshot PartSnapshot(
     return new PartDataSnapshot(
         "TEST-STATION",
         serialNumber,
-        qrCode,
+        //code change by chatgpt
+        // qrCode,
         partNumber,
         450,
         null,
