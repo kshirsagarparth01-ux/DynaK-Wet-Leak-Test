@@ -347,30 +347,50 @@ await RunAsync("part history Excel export uses filtered logical records and prod
     XNamespace ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
     AssertEqual("Part History", workbookXml.Descendants(ns + "sheet").Single().Attribute("name")?.Value);
-    AssertEqual("A3:I4", sheet.Descendants(ns + "autoFilter").Single().Attribute("ref")?.Value);
+    // <!-- Changed manually using GPT -->
+    AssertEqual("A3:H4", sheet.Descendants(ns + "autoFilter").Single().Attribute("ref")?.Value);
+    // AssertEqual("A3:I4", sheet.Descendants(ns + "autoFilter").Single().Attribute("ref")?.Value);
     AssertEqual("frozen", sheet.Descendants(ns + "pane").Single().Attribute("state")?.Value);
     AssertEqual(1, parts.Count);
 
     var cells = SheetCells(sheet);
-    var headers = Enumerable.Range(1, 9).Select(column => CellText(cells[CellName(column, 3)])).ToArray();
-    AssertEqual("SR NO.|Date|Time|Shift|Part No.|QR Code|Leak Test Value|Leak OK Range|Result / Status", string.Join("|", headers));
+    // <!-- Changed manually using GPT -->
+    var headers = Enumerable.Range(1, 8).Select(column => CellText(cells[CellName(column, 3)])).ToArray();
+    // var headers = Enumerable.Range(1, 9).Select(column => CellText(cells[CellName(column, 3)])).ToArray();
+    // <!-- Changed manually using GPT -->
+    AssertEqual(
+        "SR NO.|Date|Time|Shift|Part No.|Leak Test Value (LPM)|Leak OK Range (LPM)|Result / Status",
+        string.Join("|", headers));
+    // AssertEqual("SR NO.|Date|Time|Shift|Part No.|QR Code|Leak Test Value|Leak OK Range|Result / Status", string.Join("|", headers));
     AssertEqual("DYNAK WET LEAK TEST - PART HISTORY", CellText(cells["A1"]));
     AssertEqual("Exported: 17-08-2026 16:25", CellText(cells["A2"]));
     AssertEqual("SN-EXPORT-001", CellText(cells["A4"]));
     AssertEqual("SHIFT B", CellText(cells["D4"]));
     AssertEqual("78654-B02", CellText(cells["E4"]));
-    AssertEqual("QR-EXPORT-COMPLETE-001", CellText(cells["F4"]));
-    AssertEqual("0.4876", CellValue(cells["G4"]));
-    AssertEqual("0.01 TO 0.080", CellText(cells["H4"]));
-    AssertEqual("NG-REWORK", CellText(cells["I4"]));
+    // <!-- Changed manually using GPT -->
+    AssertEqual("0.4876", CellValue(cells["F4"]));
+    AssertEqual("0.01 TO 0.080", CellText(cells["G4"]));
+    AssertEqual("NG-REWORK", CellText(cells["H4"]));
+    // AssertEqual("QR-EXPORT-COMPLETE-001", CellText(cells["F4"]));
+    // AssertEqual("0.4876", CellValue(cells["G4"]));
+    // AssertEqual("0.01 TO 0.080", CellText(cells["H4"]));
+    // AssertEqual("NG-REWORK", CellText(cells["I4"]));
     AssertTrue(cells["B4"].Attribute("t") is null, "date should be written as a numeric Excel date cell");
     AssertTrue(cells["C4"].Attribute("t") is null, "time should be written as a numeric Excel time cell");
+    // <!-- Changed manually using GPT -->
     AssertTrue(cells["G4"].Attribute("t") is null, "leak value should remain numeric");
+    // AssertTrue(cells["G4"].Attribute("t") is null, "leak value should remain numeric");
     var leakNumberFormat = styles.Descendants(ns + "numFmt").Single(format => format.Attribute("numFmtId")?.Value == "166");
     AssertEqual("0.0000", leakNumberFormat.Attribute("formatCode")?.Value);
-    var leakCellFormat = styles.Descendants(ns + "cellXfs").Single().Elements(ns + "xf").ElementAt(int.Parse(cells["G4"].Attribute("s")!.Value, CultureInfo.InvariantCulture));
+    // <!-- Changed manually using GPT -->
+    var leakCellFormat = styles.Descendants(ns + "cellXfs")
+        .Single()
+        .Elements(ns + "xf")
+        .ElementAt(int.Parse(cells["F4"].Attribute("s")!.Value, CultureInfo.InvariantCulture));
+    // var leakCellFormat = styles.Descendants(ns + "cellXfs").Single().Elements(ns + "xf").ElementAt(int.Parse(cells["G4"].Attribute("s")!.Value, CultureInfo.InvariantCulture));
     AssertEqual("166", leakCellFormat.Attribute("numFmtId")?.Value);
-    AssertTrue(sheet.Descendants(ns + "col").Any(col => col.Attribute("min")?.Value == "6" && DecimalAttribute(col, "width") >= 30m), "QR column should be wide");
+    // <!-- Changed manually using GPT -->
+    // AssertTrue(sheet.Descendants(ns + "col").Any(col => col.Attribute("min")?.Value == "6" && DecimalAttribute(col, "width") >= 30m), "QR column should be wide");
     AssertEqual(1, sheet.Descendants(ns + "row").Count(row => int.Parse(row.Attribute("r")!.Value, CultureInfo.InvariantCulture) >= 4));
 });
 
@@ -1024,10 +1044,15 @@ await RunAsync("new unsaved Part Number stays pending while LOW and saves once w
 
     var workbook = PartHistoryExcelExporter.CreateDailyWorkbook([first, second], first.Date);
     var cells = SheetCells(ReadWorkbookXml(workbook, "xl/worksheets/sheet1.xml"));
-    AssertTrue(cells["G4"].Attribute("t") is null && cells["G5"].Attribute("t") is null, "daily Leak Test Values should remain numeric");
-    AssertEqual(cells["G4"].Attribute("s")?.Value, cells["G5"].Attribute("s")?.Value);
-    AssertEqual("0.00 TO 0.500", CellText(cells["H4"]));
-    AssertEqual("0.00 TO 0.750", CellText(cells["H5"]));
+    // <!-- Changed manually using GPT -->
+    AssertTrue(cells["F4"].Attribute("t") is null && cells["F5"].Attribute("t") is null, "daily Leak Test Values should remain numeric");
+    AssertEqual(cells["F4"].Attribute("s")?.Value, cells["F5"].Attribute("s")?.Value);
+    AssertEqual("0.00 TO 0.500", CellText(cells["G4"]));
+    AssertEqual("0.00 TO 0.750", CellText(cells["G5"]));
+    // AssertTrue(cells["G4"].Attribute("t") is null && cells["G5"].Attribute("t") is null, "daily Leak Test Values should remain numeric");
+    // AssertEqual(cells["G4"].Attribute("s")?.Value, cells["G5"].Attribute("s")?.Value);
+    // AssertEqual("0.00 TO 0.500", CellText(cells["H4"]));
+    // AssertEqual("0.00 TO 0.750", CellText(cells["H5"]));
 });
 
 await RunAsync("snapshot failure retries on the next poll while D1075 remains HIGH", async () =>
@@ -1586,10 +1611,11 @@ static string CellValue(XElement cell)
     return cell.Element(ns + "v")?.Value ?? "";
 }
 
-static decimal DecimalAttribute(XElement element, string name)
-{
-    return decimal.Parse(element.Attribute(name)?.Value ?? "0", CultureInfo.InvariantCulture);
-}
+// <!-- Changed manually using GPT -->
+// static decimal DecimalAttribute(XElement element, string name)
+// {
+//     return decimal.Parse(element.Attribute(name)?.Value ?? "0", CultureInfo.InvariantCulture);
+// }
 
 static List<PlcSignalMapping> CompleteMappings()
 {

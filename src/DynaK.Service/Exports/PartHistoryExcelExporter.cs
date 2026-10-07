@@ -12,6 +12,7 @@ public static class PartHistoryExcelExporter
 {
     public const string ContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
+// <!-- Changed manually using GPT -->
     private static readonly string[] Headers =
     [
         "SR NO.",
@@ -19,14 +20,28 @@ public static class PartHistoryExcelExporter
         "Time",
         "Shift",
         "Part No.",
-        "QR Code",
-        "Leak Test Value",
-        "Leak OK Range",
+        "Leak Test Value (LPM)",
+        "Leak OK Range (LPM)",
         "Result / Status"
     ];
 
-    private static readonly double[] MinimumWidths = [16, 12, 10, 12, 18, 30, 15, 18, 16];
-    private static readonly double[] MaximumWidths = [32, 14, 12, 18, 28, 60, 18, 24, 24];
+    private static readonly double[] MinimumWidths = [16, 12, 10, 12, 18, 18, 20, 16];
+    private static readonly double[] MaximumWidths = [32, 14, 12, 18, 28, 22, 26, 24];
+    // private static readonly string[] Headers =
+    // [
+    //     "SR NO.",
+    //     "Date",
+    //     "Time",
+    //     "Shift",
+    //     "Part No.",
+    //     "QR Code",
+    //     "Leak Test Value",
+    //     "Leak OK Range",
+    //     "Result / Status"
+    // ];
+
+    // private static readonly double[] MinimumWidths = [16, 12, 10, 12, 18, 30, 15, 18, 16];
+    // private static readonly double[] MaximumWidths = [32, 14, 12, 18, 28, 60, 18, 24, 24];
 
     public static string CreateFileName(DateTimeOffset exportedAt) =>
         $"DynaK_Part_History_{exportedAt.ToLocalTime():yyyy-MM-dd_HHmm}.xlsx";
@@ -155,10 +170,15 @@ public static class PartHistoryExcelExporter
                 { WorkbookViewId = 0U }),
             CreateColumns(rows),
             sheetData,
-            new AutoFilter { Reference = $"A3:I{Math.Max(3, lastRow)}" },
+            // <!-- Changed manually using GPT -->
+            new AutoFilter { Reference = $"A3:H{Math.Max(3, lastRow)}" },
             new MergeCells(
-                new MergeCell { Reference = "A1:I1" },
-                new MergeCell { Reference = "A2:I2" })
+                new MergeCell { Reference = "A1:H1" },
+                new MergeCell { Reference = "A2:H2" })
+            // new AutoFilter { Reference = $"A3:I{Math.Max(3, lastRow)}" },
+            // new MergeCells(
+            //     new MergeCell { Reference = "A1:I1" },
+            //     new MergeCell { Reference = "A2:I2" })
             { Count = 2U },
             new PageMargins
             {
@@ -216,7 +236,7 @@ public static class PartHistoryExcelExporter
 
         return columns;
     }
-
+// <!-- Changed manually using GPT -->
     private static Row DataRow(ExportRow row, uint rowIndex) =>
         new(
             InlineStringCell(CellReference(1, (int)rowIndex), row.SerialNumber, 7U),
@@ -224,15 +244,30 @@ public static class PartHistoryExcelExporter
             NumberCell(CellReference(3, (int)rowIndex), row.Time.ToTimeSpan().TotalDays, 6U),
             InlineStringCell(CellReference(4, (int)rowIndex), row.Shift, 4U),
             InlineStringCell(CellReference(5, (int)rowIndex), row.PartNumber, 7U),
-            InlineStringCell(CellReference(6, (int)rowIndex), row.QrCode, 7U),
-            NumberOrBlankCell(CellReference(7, (int)rowIndex), row.LeakValue, 8U),
-            InlineStringCell(CellReference(8, (int)rowIndex), row.LeakOkRange, 4U),
-            InlineStringCell(CellReference(9, (int)rowIndex), row.Result, 4U))
+            NumberOrBlankCell(CellReference(6, (int)rowIndex), row.LeakValue, 8U),
+            InlineStringCell(CellReference(7, (int)rowIndex), row.LeakOkRange, 4U),
+            InlineStringCell(CellReference(8, (int)rowIndex), row.Result, 4U))
         {
             RowIndex = rowIndex,
             Height = 20D,
             CustomHeight = true
         };
+    // private static Row DataRow(ExportRow row, uint rowIndex) =>
+    //     new(
+    //         InlineStringCell(CellReference(1, (int)rowIndex), row.SerialNumber, 7U),
+    //         NumberCell(CellReference(2, (int)rowIndex), row.Date.ToDateTime(TimeOnly.MinValue).ToOADate(), 5U),
+    //         NumberCell(CellReference(3, (int)rowIndex), row.Time.ToTimeSpan().TotalDays, 6U),
+    //         InlineStringCell(CellReference(4, (int)rowIndex), row.Shift, 4U),
+    //         InlineStringCell(CellReference(5, (int)rowIndex), row.PartNumber, 7U),
+    //         InlineStringCell(CellReference(6, (int)rowIndex), row.QrCode, 7U),
+    //         NumberOrBlankCell(CellReference(7, (int)rowIndex), row.LeakValue, 8U),
+    //         InlineStringCell(CellReference(8, (int)rowIndex), row.LeakOkRange, 4U),
+    //         InlineStringCell(CellReference(9, (int)rowIndex), row.Result, 4U))
+    //     {
+    //         RowIndex = rowIndex,
+    //         Height = 20D,
+    //         CustomHeight = true
+    //     };
 
     private static Cell InlineStringCell(string reference, string value, uint styleIndex)
     {
@@ -414,84 +449,207 @@ public static class PartHistoryExcelExporter
     private static bool NeedsPreservedWhitespace(string value) =>
         value.Length > 0 && (char.IsWhiteSpace(value[0]) || char.IsWhiteSpace(value[^1]));
 
-    private sealed record ExportRow(
-        string SerialNumber,
-        DateOnly Date,
-        TimeOnly Time,
-        string Shift,
-        string PartNumber,
-        string QrCode,
-        decimal? LeakValue,
-        string LeakOkRange,
-        string Result)
+// <!-- Changed manually using GPT -->
+private sealed record ExportRow(
+    string SerialNumber,
+    DateOnly Date,
+    TimeOnly Time,
+    string Shift,
+    string PartNumber,
+    decimal? LeakValue,
+    string LeakOkRange,
+    string Result)
+{
+    public static ExportRow From(LogicalPart part)
     {
-        public static ExportRow From(LogicalPart part)
+        var attempt = part.LatestAttempt;
+
+        return new ExportRow(
+            attempt.SerialNumber ?? "",
+            attempt.Date,
+            attempt.Time,
+            attempt.Shift,
+            attempt.PartNumber,
+            attempt.LeakTestValue,
+            FormatLeakRange(attempt.LowerLimit, attempt.UpperLimit),
+            ResultText(attempt, part));
+    }
+
+    public static ExportRow From(ProductionRecord record) =>
+        new(
+            record.SerialNumber ?? "",
+            record.Date,
+            record.Time,
+            record.Shift,
+            record.PartNumber,
+            record.LeakTestValue,
+            FormatLeakRange(record.LowerLimit, record.UpperLimit),
+            NormalizeResult(record.ResolvedResult));
+
+    public string[] DisplayValues() =>
+    [
+        SerialNumber,
+        Date.ToString("dd-MM-yyyy", CultureInfo.InvariantCulture),
+        Time.ToString("HH:mm:ss", CultureInfo.InvariantCulture),
+        Shift,
+        PartNumber,
+        LeakValue?.ToString("0.0000", CultureInfo.InvariantCulture) ?? "",
+        LeakOkRange,
+        Result
+    ];
+
+    private static string FormatLeakRange(decimal minimum, decimal maximum) =>
+        $"{minimum.ToString("0.00", CultureInfo.InvariantCulture)} TO {maximum.ToString("0.000", CultureInfo.InvariantCulture)}";
+
+    private static string ResultText(ProductionRecord record, LogicalPart part)
+    {
+        var overallResult = NormalizeResult(part.OverallResult);
+
+        if (overallResult.Length > 0)
         {
-            var attempt = part.LatestAttempt;
-            return new ExportRow(
-                attempt.SerialNumber ?? "",
-                attempt.Date,
-                attempt.Time,
-                attempt.Shift,
-                attempt.PartNumber,
-                attempt.QrCode,
-                attempt.LeakTestValue,
-                FormatLeakRange(attempt.LowerLimit, attempt.UpperLimit),
-                ResultText(attempt, part));
+            return overallResult;
         }
 
-        public static ExportRow From(ProductionRecord record) =>
-            new(
-                record.SerialNumber ?? "",
-                record.Date,
-                record.Time,
-                record.Shift,
-                record.PartNumber,
-                record.QrCode,
-                record.LeakTestValue,
-                FormatLeakRange(record.LowerLimit, record.UpperLimit),
-                NormalizeResult(record.ResolvedResult));
+        return NormalizeResult(record.ResolvedResult);
+    }
 
-        public string[] DisplayValues() =>
-        [
-            SerialNumber,
-            Date.ToString("dd-MM-yyyy", CultureInfo.InvariantCulture),
-            Time.ToString("HH:mm:ss", CultureInfo.InvariantCulture),
-            Shift,
-            PartNumber,
-            QrCode,
-            LeakValue?.ToString("0.0000", CultureInfo.InvariantCulture) ?? "",
-            LeakOkRange,
-            Result
-        ];
+    private static string NormalizeResult(string? value)
+    {
+        var normalized = value?.Trim().ToUpperInvariant() ?? "";
 
-        private static string FormatLeakRange(decimal minimum, decimal maximum) =>
-            $"{minimum.ToString("0.00", CultureInfo.InvariantCulture)} TO {maximum.ToString("0.000", CultureInfo.InvariantCulture)}";
-
-        private static string ResultText(ProductionRecord record, LogicalPart part)
+        return normalized switch
         {
-            var overallResult = NormalizeResult(part.OverallResult);
-            if (overallResult.Length > 0)
-            {
-                return overallResult;
-            }
-
-            return NormalizeResult(record.ResolvedResult);
-        }
-
-        private static string NormalizeResult(string? value)
-        {
-            var normalized = value?.Trim().ToUpperInvariant() ?? "";
-            return normalized switch
-            {
-                "OK" => "OK",
-                "NG" => "NG",
-                "REWORK" => "REWORK",
-                "NG-REWORK" => "NG-REWORK",
-                _ when normalized.StartsWith("NG ", StringComparison.Ordinal) || normalized.StartsWith("NG/", StringComparison.Ordinal) => "NG",
-                _ => normalized
-            };
-        }
-
+            "OK" => "OK",
+            "NG" => "NG",
+            "REWORK" => "REWORK",
+            "NG-REWORK" => "NG-REWORK",
+            _ when normalized.StartsWith("NG ", StringComparison.Ordinal) ||
+                   normalized.StartsWith("NG/", StringComparison.Ordinal) => "NG",
+            _ => normalized
+        };
     }
 }
+}
+//     private sealed record ExportRow(
+//         string SerialNumber,
+//         DateOnly Date,
+//         TimeOnly Time,
+//         string Shift,
+//         string PartNumber,
+//         decimal? LeakValue,
+//         string LeakOkRange,
+//         string Result)
+//     // private sealed record ExportRow(
+//     //     string SerialNumber,
+//     //     DateOnly Date,
+//     //     TimeOnly Time,
+//     //     string Shift,
+//     //     string PartNumber,
+//     //     string QrCode,
+//     //     decimal? LeakValue,
+//     //     string LeakOkRange,
+//     //     string Result)
+//     // {
+//         public static ExportRow From(LogicalPart part)
+//         {
+//             // <!-- Changed manually using GPT -->
+//             return new ExportRow(
+//                 attempt.SerialNumber ?? "",
+//                 attempt.Date,
+//                 attempt.Time,
+//                 attempt.Shift,
+//                 attempt.PartNumber,
+//                 attempt.LeakTestValue,
+//                 FormatLeakRange(attempt.LowerLimit, attempt.UpperLimit),
+//                 ResultText(attempt, part));
+//             // var attempt = part.LatestAttempt;
+//             // return new ExportRow(
+//             //     attempt.SerialNumber ?? "",
+//             //     attempt.Date,
+//             //     attempt.Time,
+//             //     attempt.Shift,
+//             //     attempt.PartNumber,
+//             //     attempt.QrCode,
+//             //     attempt.LeakTestValue,
+//             //     FormatLeakRange(attempt.LowerLimit, attempt.UpperLimit),
+//             //     ResultText(attempt, part));
+//         }
+
+//         public static ExportRow From(ProductionRecord record) =>
+            
+//             // <!-- Changed manually using GPT -->
+//             new ExportRow(
+//                 record.SerialNumber ?? "",
+//                 record.Date,
+//                 record.Time,
+//                 record.Shift,
+//                 record.PartNumber,
+//                 record.LeakTestValue,
+//                 FormatLeakRange(record.LowerLimit, record.UpperLimit),
+//                 NormalizeResult(record.ResolvedResult));
+//             // new(
+//             //     record.SerialNumber ?? "",
+//             //     record.Date,
+//             //     record.Time,
+//             //     record.Shift,
+//             //     record.PartNumber,
+//             //     record.QrCode,
+//             //     record.LeakTestValue,
+//             //     FormatLeakRange(record.LowerLimit, record.UpperLimit),
+//             //     NormalizeResult(record.ResolvedResult));
+
+//         public string[] DisplayValues() =>
+//         [
+//             // <!-- Changed manually using GPT -->
+//             public string[] DisplayValues() =>
+//             [
+//                 SerialNumber,
+//                 Date.ToString("dd-MM-yyyy", CultureInfo.InvariantCulture),
+//                 Time.ToString("HH:mm:ss", CultureInfo.InvariantCulture),
+//                 Shift,
+//                 PartNumber,
+//                 LeakValue?.ToString("0.0000", CultureInfo.InvariantCulture) ?? "",
+//                 LeakOkRange,
+//                 Result
+//             ];
+//             // SerialNumber,
+//             // Date.ToString("dd-MM-yyyy", CultureInfo.InvariantCulture),
+//             // Time.ToString("HH:mm:ss", CultureInfo.InvariantCulture),
+//             // Shift,
+//             // PartNumber,
+//             // QrCode,
+//             // LeakValue?.ToString("0.0000", CultureInfo.InvariantCulture) ?? "",
+//             // LeakOkRange,
+//             // Result
+//         ];
+
+//         private static string FormatLeakRange(decimal minimum, decimal maximum) =>
+//             $"{minimum.ToString("0.00", CultureInfo.InvariantCulture)} TO {maximum.ToString("0.000", CultureInfo.InvariantCulture)}";
+
+//         private static string ResultText(ProductionRecord record, LogicalPart part)
+//         {
+//             var overallResult = NormalizeResult(part.OverallResult);
+//             if (overallResult.Length > 0)
+//             {
+//                 return overallResult;
+//             }
+
+//             return NormalizeResult(record.ResolvedResult);
+//         }
+
+//         private static string NormalizeResult(string? value)
+//         {
+//             var normalized = value?.Trim().ToUpperInvariant() ?? "";
+//             return normalized switch
+//             {
+//                 "OK" => "OK",
+//                 "NG" => "NG",
+//                 "REWORK" => "REWORK",
+//                 "NG-REWORK" => "NG-REWORK",
+//                 _ when normalized.StartsWith("NG ", StringComparison.Ordinal) || normalized.StartsWith("NG/", StringComparison.Ordinal) => "NG",
+//                 _ => normalized
+//             };
+//         }
+
+//     }
+// }

@@ -6,7 +6,7 @@ public sealed class AppSettings
     public string StationName { get; set; } = "DynaK Wet Leak Test Station";
     public string DatabasePath { get; set; } = "data/dynak-wet-leak-test.db";
     public string LiveLeakValueFilePath { get; set; } = @"C:\DynaK\live_leak_value.txt";
-    public string LeakTestUnit { get; set; } = "bar";
+    public string LeakTestUnit { get; set; } = "LPM";
     public decimal LowerLimit { get; set; } = 0.00m;
     public decimal UpperLimit { get; set; } = 0.500m;
     public string ReportRootFolder { get; set; } = StationDataPaths.DefaultReportRootFolder;

@@ -189,14 +189,17 @@ test("scalar datatype ranges larger than their minimum are accepted before save"
 });
 
 test("Current Test renders the shared decoded PLC snapshot and configured value mappings", () => {
-  context.state.config.leakTestUnit = "bar";
+ // <!-- Changed manually using GPT -->
+  context.state.config.leakTestUnit = "LPM";
+  // context.state.config.leakTestUnit = "bar";
   context.state.config.lowerLimit = 0;
   context.state.config.upperLimit = 0.5;
   context.renderCurrentPart({
     serialNumber: "PLC-SN-123",
     qrCode: "QR-123",
     partNumber: "PART-50",
-    leakTestUnit: "bar",
+    // <!-- Changed manually using GPT -->
+    leakTestUnit: "LPM",
     lowerLimit: 0,
     upperLimit: 0.5
   }, {
@@ -215,7 +218,8 @@ test("Current Test renders the shared decoded PLC snapshot and configured value 
   assert.equal(currentFields.get("currentPartNo").textContent, "PART-50");
   assert.equal(currentFields.get("currentSerialNumber").textContent, "PLC-SN-123");
   assert.equal(currentFields.get("currentLeak").textContent, "0.1250");
-  assert.equal(currentFields.get("currentLeakRange").textContent, "0.00 TO 0.500");
+  assert.equal(currentFields.get("currentLeakUnit").textContent, "LPM");
+  assert.equal(currentFields.get("currentLeakRange").textContent, "0.00 TO 0.500 LPM");
   assert.equal(currentFields.get("currentResult").textContent, "OK");
   assert.equal(currentFields.get("currentMode").textContent, "Auto");
   assert.equal(currentFields.get("currentError").textContent, "Fixture clamp low");

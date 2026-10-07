@@ -237,9 +237,16 @@ public sealed class SettingsStore
             throw new SettingsValidationException(errors);
         }
     }
-
+//modified manually using GPT
     private static void NormalizeAppSettings(AppSettings settings)
     {
+        settings.LeakTestUnit = string.Equals(
+            settings.LeakTestUnit?.Trim(),
+            "bar",
+            StringComparison.OrdinalIgnoreCase)
+                ? "LPM"
+                : settings.LeakTestUnit?.Trim() ?? "";
+
         settings.Plc = Normalize(settings.Plc ?? new PlcConnectionSettings());
         settings.Shifts = settings.Shifts is { Count: > 0 }
             ? settings.Shifts.Select(s => new ShiftDefinition((s.Name ?? "").Trim(), s.StartsAt, s.EndsAt)).ToList()

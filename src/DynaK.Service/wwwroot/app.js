@@ -274,7 +274,9 @@ function renderCurrentPart(record, signals, liveResult) {
   $("currentQr").textContent = qrCode || "--";
   $("currentPartNo").textContent = partNumber || "--";
   $("currentLeak").textContent = formatLeakTestValue(leakValue);
-  $("currentLeakUnit").textContent = matchingRecord?.leakTestUnit || state.config?.leakTestUnit || "--";
+  // <!-- Changed using GPT -->
+  $("currentLeakUnit").textContent = leakUnit();
+  // $("currentLeakUnit").textContent = matchingRecord?.leakTestUnit || state.config?.leakTestUnit || "--";
   $("currentLeakRange").textContent = matchingRecord
     ? formatLeakRange(matchingRecord.lowerLimit, matchingRecord.upperLimit)
     : formatLeakRange(state.config?.lowerLimit, state.config?.upperLimit);
@@ -299,7 +301,9 @@ function clearCurrentPart() {
   $("currentQr").textContent = "--";
   $("currentPartNo").textContent = "--";
   $("currentLeak").textContent = "--";
-  $("currentLeakUnit").textContent = state.config?.leakTestUnit || "--";
+  // <!-- Changed using GPT -->
+  $("currentLeakUnit").textContent = leakUnit();
+  // $("currentLeakUnit").textContent = state.config?.leakTestUnit || "--";
   $("currentLeakRange").textContent = formatLeakRange(state.config?.lowerLimit, state.config?.upperLimit);
   $("currentPlcQr").textContent = "--";
   $("currentResult").textContent = "--";
@@ -333,7 +337,11 @@ function renderRecords(target, parts, includeDate) {
 
 function partCells(part, attempt, history) {
   const error = machineError(attempt, "-");
-  const leak = attempt.leakTestValue == null ? "--" : `${formatLeakTestValue(attempt.leakTestValue)} ${escapeHtml(attempt.leakTestUnit)}`;
+  // <!-- Changed manually using GPT -->
+  const leak = attempt.leakTestValue == null
+    ? "--"
+    : `${formatLeakTestValue(attempt.leakTestValue)} ${escapeHtml(leakUnit())}`;
+  // const leak = attempt.leakTestValue == null ? "--" : `${formatLeakTestValue(attempt.leakTestValue)} ${escapeHtml(attempt.leakTestUnit)}`;
   const leakRange = formatLeakRange(attempt.lowerLimit, attempt.upperLimit);
   const result = logicalResult(part);
   const common = `<td>${escapeHtml(attempt.serialNumber || "--")}</td><td>${escapeHtml(part.qrCode)}</td><td>${escapeHtml(part.partNumber)}</td><td class="right">${leak}</td><td>${escapeHtml(leakRange)}</td><td><span class="result-chip ${resultClass(result)}">${escapeHtml(result)}</span></td>`;
@@ -986,7 +994,9 @@ function renderDrawer(part) {
       ["SR NO.", attempt.serialNumber || "--"],
       ["QR CODE", attempt.qrCode],
       ["PART NO.", attempt.partNumber],
-      ["LEAK VALUE", attempt.leakTestValue == null ? "--" : `${formatLeakTestValue(attempt.leakTestValue)} ${attempt.leakTestUnit}`],
+      // <!-- Changed manually using GPT -->
+      ["LEAK VALUE", attempt.leakTestValue == null ? "--" : `${formatLeakTestValue(attempt.leakTestValue)} ${leakUnit()}`],
+      // ["LEAK VALUE", attempt.leakTestValue == null ? "--" : `${formatLeakTestValue(attempt.leakTestValue)} ${attempt.leakTestUnit}`],
       ["LEAK OK RANGE", formatLeakRange(attempt.lowerLimit, attempt.upperLimit)],
       ["RESULT", resultText(attempt)],
       ["SHIFT", attempt.shift],
@@ -1050,11 +1060,20 @@ function formatLeakTestValue(value) {
   return value != null && String(value).trim() && Number.isFinite(numeric) ? numeric.toFixed(4) : "--";
 }
 
+// <!-- Changed manually using GPT -->
 function formatLeakRange(minimum, maximum) {
   const min = Number(minimum);
   const max = Number(maximum);
-  return Number.isFinite(min) && Number.isFinite(max) ? `${min.toFixed(2)} TO ${max.toFixed(3)}` : "--";
+
+  return Number.isFinite(min) && Number.isFinite(max)
+    ? `${min.toFixed(2)} TO ${max.toFixed(3)} ${leakUnit()}`
+    : "--";
 }
+// function formatLeakRange(minimum, maximum) {
+//   const min = Number(minimum);
+//   const max = Number(maximum);
+//   return Number.isFinite(min) && Number.isFinite(max) ? `${min.toFixed(2)} TO ${max.toFixed(3)}` : "--";
+// }
 
 function resultClass(result) {
   const normalized = String(result || "").trim().toUpperCase();
@@ -1117,6 +1136,12 @@ function escapeHtml(value) {
     "\"": "&quot;",
     "'": "&#039;"
   }[char]));
+}
+
+// <!-- Changed using GPT -->
+function leakUnit() {
+  const configured = String(state.config?.leakTestUnit || "").trim();
+  return configured || "LPM";
 }
 
 loadState();
