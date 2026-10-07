@@ -9,6 +9,9 @@ public sealed class PlcSignalMapping
     public const string NgResultSignalName = "NG";
     public const string CombinedResultSignalName = "OK / NG";
     public const string LegacyCombinedResultSignalName = "OK / NG / Rework";
+    public const string SerialNumberSignalName = "Serial Number";
+    public const string ModelNumberSignalName = "Model Number";
+    public const string LegacyPartNumberSignalName = "Part Number";
 
     public static readonly string[] RequiredSignals =
     [
@@ -22,8 +25,8 @@ public sealed class PlcSignalMapping
         "Auto / Manual",
         "Error",
         "Running Status",
-        "QR Code Value",
-        "Part Number",
+        SerialNumberSignalName,
+        ModelNumberSignalName,
         PartDataReadySignalName,
         "System Ready",
         "Communication OK",
@@ -42,8 +45,8 @@ public sealed class PlcSignalMapping
         "Auto / Manual",
         "Error",
         "Running Status",
-        "QR Code Value",
-        "Part Number",
+        SerialNumberSignalName,
+        ModelNumberSignalName,
         PartDataReadySignalName
     ];
 
@@ -150,12 +153,11 @@ public sealed class PlcSignalMapping
             DRegister("Auto / Manual", "D2030", "UInt16", "Read", "Editable mode mapping. Initial defaults use current known PLC values.", valueMap: "1=Auto;2=Manual"),
             DRegister("Error", "D2035", "UInt16", "Read", "Editable placeholder error-code mapping until real PLC meanings are supplied.", valueMap: "0=No Error;1=Error 1;2=Error 2;3=Error 3;4=Error 4;5=Error 5"),
             DRegister("Running Status", "D2040", "UInt16", "Read", "Editable placeholder running-status mapping until real PLC meanings are supplied.", valueMap: "0=Stopped;1=Running;2=Status 2;3=Status 3;4=Status 4;5=Status 5"),
-            DRegister("QR Code Value", "D2050", "AsciiString", "Read", "Verify register length and encoding; length is D registers.", length: 10, encoding: "ASCII"),
-            DRegister("Part Number", "D2060", "AsciiString", "Read", "Verify register length and encoding; length is D registers.", length: 10, encoding: "ASCII"),
-            DRegister(PartDataReadySignalName, "D1075", "UInt16", "Read", "PLC-controlled read-only trigger. While HIGH, each valid Part Number is captured and stored once without waiting for a LOW transition.", valueMap: "0=LOW;1=HIGH"),
+            DRegister(ModelNumberSignalName, "D2060", "AsciiString", "Read", "Reusable production model identifier. Address, datatype, register range, byte order and encoding remain editable.", length: 10, encoding: "ASCII"),
+            DRegister(PartDataReadySignalName, "D1075", "UInt16", "Read", "PLC-controlled read-only trigger. While HIGH, each valid Serial Number is captured and stored once without waiting for a LOW transition.", valueMap: "0=LOW;1=HIGH"),
             new PlcSignalMapping
             {
-                SignalName = "Serial Number",
+                SignalName = SerialNumberSignalName,
                 Address = "D2000",
                 AddressType = "D Register",
                 Direction = "Read",
@@ -236,9 +238,17 @@ public sealed class PlcSignalMapping
     public static string NormalizeSignalName(string? value)
     {
         var signalName = (value ?? "").Trim();
-        return signalName.Equals(LegacyCombinedResultSignalName, StringComparison.OrdinalIgnoreCase)
-            ? CombinedResultSignalName
-            : signalName;
+        if (signalName.Equals(LegacyCombinedResultSignalName, StringComparison.OrdinalIgnoreCase))
+        {
+            return CombinedResultSignalName;
+        }
+
+        if (signalName.Equals(LegacyPartNumberSignalName, StringComparison.OrdinalIgnoreCase))
+        {
+            return ModelNumberSignalName;
+        }
+
+        return signalName;
     }
 
     public static bool IsCombinedResultSignalName(string? value) =>
