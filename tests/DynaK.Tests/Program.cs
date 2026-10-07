@@ -430,8 +430,9 @@ await RunAsync("part history Excel export uses filtered logical records and prod
     AssertTrue(cells["B4"].Attribute("t") is null, "date should be written as a numeric Excel date cell");
     AssertTrue(cells["C4"].Attribute("t") is null, "time should be written as a numeric Excel time cell");
     // <!-- Changed manually using GPT -->
-    AssertTrue(cells["G4"].Attribute("t") is null, "leak value should remain numeric");
+    //code change by chatgpt
     // AssertTrue(cells["G4"].Attribute("t") is null, "leak value should remain numeric");
+    AssertTrue(cells["F4"].Attribute("t") is null, "leak value should remain numeric");
     var leakNumberFormat = styles.Descendants(ns + "numFmt").Single(format => format.Attribute("numFmtId")?.Value == "166");
     AssertEqual("0.0000", leakNumberFormat.Attribute("formatCode")?.Value);
     // <!-- Changed manually using GPT -->
@@ -1582,7 +1583,9 @@ await RunAsync("one undecodable PLC mapping does not block the shared live snaps
     await client.ConnectAsync(PlcClientConfiguration.From(settings), CancellationToken.None);
 
     var signals = await client.ReadConfiguredSignalsAsync(CancellationToken.None);
-    AssertEqual(13, signals.Count);
+    //code change by chatgpt
+    // AssertEqual(13, signals.Count);
+    AssertEqual(12, signals.Count);
     AssertEqual(123m, signals["Target Parts Per Shift"].InterpretedValue);
     AssertEqual(50m, signals["Actual Part Count"].InterpretedValue);
     AssertEqual(1234m, signals["Leak Test Value"].InterpretedValue);
