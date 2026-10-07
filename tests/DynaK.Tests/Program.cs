@@ -613,6 +613,22 @@ await RunSync("persisted QR PLC mapping is removed while unrelated mappings are 
 
     AssertTrue(store.Current.SignalMappings.All(mapping => !mapping.SignalName.Equals("QR Code Value", StringComparison.OrdinalIgnoreCase)), "legacy QR mapping must not survive settings merge");
     AssertTrue(store.Current.SignalMappings.Any(mapping => mapping.SignalName == "Part Number"), "Part Number mapping must remain present");
+
+    //code change by chatgpt
+    var updateMappings = PlcSignalMapping.CreateDefaults();
+    updateMappings.Add(new PlcSignalMapping
+    {
+        SignalName = "QR Code Value",
+        Address = "D2050",
+        AddressType = "D Register",
+        DataType = "AsciiString",
+        Direction = "Read",
+        Length = 10,
+        Encoding = "ASCII",
+        Enabled = true
+    });
+    var candidate = store.BuildCandidate(new SettingsUpdate(null, null, null, null, null, updateMappings, null));
+    AssertTrue(candidate.SignalMappings.All(mapping => !mapping.SignalName.Equals("QR Code Value", StringComparison.OrdinalIgnoreCase)), "QR mapping submitted through settings update must be stripped");
 });
 
 await RunSync("invalid configuration is rejected", () =>
