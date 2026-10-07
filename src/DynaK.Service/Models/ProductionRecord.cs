@@ -5,7 +5,8 @@ public sealed record ProductionRecord(
     string StationId,
     long PlcSequenceId,
     string? SerialNumber,
-    string QrCode,
+    //code change by chatgpt
+    // string QrCode,
     string PartNumber,
     DateOnly Date,
     TimeOnly Time,
