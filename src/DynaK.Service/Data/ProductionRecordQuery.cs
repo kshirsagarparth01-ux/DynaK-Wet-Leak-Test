@@ -6,7 +6,7 @@ public sealed record ProductionRecordQuery(
     DateTimeOffset? From,
     DateTimeOffset? To,
     string? Shift,
-    string? PartNumber,
-    string? QrCode,
+    string? SerialNumber,
+    string? ModelNumber,
     ProductionResult? Result,
     int Limit = 200);
