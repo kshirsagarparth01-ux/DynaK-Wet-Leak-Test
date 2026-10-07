@@ -535,12 +535,12 @@ public sealed class ProductionRepository
 
         await using var insert = connection.CreateCommand();
         insert.Transaction = transaction;
+        //code change by chatgpt
         insert.CommandText = """
             INSERT INTO logical_parts (
                 station_id, qr_code, part_number, overall_result, latest_attempt_id,
                 created_timestamp, updated_timestamp
             )
-            //code change by chatgpt
             -- VALUES ($station_id, $qr_code, $part_number, $overall_result, NULL, $created_timestamp, $updated_timestamp);
             VALUES ($station_id, '', $part_number, $overall_result, NULL, $created_timestamp, $updated_timestamp);
             """;
