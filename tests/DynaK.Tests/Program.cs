@@ -118,7 +118,9 @@ await RunAsync("v5 logical-part migration backs up and preserves existing histor
     var database = new SqliteDatabase(store, NullLogger<SqliteDatabase>.Instance);
     await database.InitializeAsync(CancellationToken.None);
     var records = new ProductionRepository(database);
-    await records.InsertAsync(SampleRecord(1060) with { QrCode = "QR-MIGRATION", PartNumber = "MIG-001" }, CancellationToken.None);
+    //code change by chatgpt
+    // await records.InsertAsync(SampleRecord(1060) with { QrCode = "QR-MIGRATION", PartNumber = "MIG-001" }, CancellationToken.None);
+    await records.InsertAsync(SampleRecord(1060) with { PartNumber = "MIG-001" }, CancellationToken.None);
 
     await using (var connection = await database.OpenConnectionAsync(CancellationToken.None))
     {
@@ -163,8 +165,11 @@ await RunAsync("v5 logical-part migration backs up and preserves existing histor
     AssertEqual("MIG-001", (await LogicalPartByNumberAsync(records, "MIG-001")).PartNumber);
     AssertEqual(1, Directory.GetFiles(root, "station.db.pre-v5-*.bak").Length);
 
-    await records.InsertAsync(SampleRecord(1061) with { QrCode = "", PartNumber = "MIG-002" }, CancellationToken.None);
-    await records.InsertAsync(SampleRecord(1062) with { QrCode = "", PartNumber = "MIG-003" }, CancellationToken.None);
+    //code change by chatgpt
+    // await records.InsertAsync(SampleRecord(1061) with { QrCode = "", PartNumber = "MIG-002" }, CancellationToken.None);
+    // await records.InsertAsync(SampleRecord(1062) with { QrCode = "", PartNumber = "MIG-003" }, CancellationToken.None);
+    await records.InsertAsync(SampleRecord(1061) with { PartNumber = "MIG-002" }, CancellationToken.None);
+    await records.InsertAsync(SampleRecord(1062) with { PartNumber = "MIG-003" }, CancellationToken.None);
     AssertEqual(3, await records.CountLogicalPartsAsync(CancellationToken.None));
 });
 
@@ -179,7 +184,9 @@ await RunAsync("v7 migration removes obsolete timing lifecycle columns without l
     var database = new SqliteDatabase(store, NullLogger<SqliteDatabase>.Instance);
     await database.InitializeAsync(CancellationToken.None);
     var records = new ProductionRepository(database);
-    await records.InsertAsync(SampleRecord(1090) with { PartNumber = "MIG-V7", QrCode = "QR-MIG-V7" }, CancellationToken.None);
+    //code change by chatgpt
+    // await records.InsertAsync(SampleRecord(1090) with { PartNumber = "MIG-V7", QrCode = "QR-MIG-V7" }, CancellationToken.None);
+    await records.InsertAsync(SampleRecord(1090) with { PartNumber = "MIG-V7" }, CancellationToken.None);
 
     await using (var connection = await database.OpenConnectionAsync(CancellationToken.None))
     {
@@ -194,7 +201,9 @@ await RunAsync("v7 migration removes obsolete timing lifecycle columns without l
 
     await database.InitializeAsync(CancellationToken.None);
     AssertEqual(1, await records.CountAsync(CancellationToken.None));
-    AssertEqual("MIG-V7", (await records.QueryAsync(new ProductionRecordQuery(null, null, null, "MIG-V7", null, null), CancellationToken.None)).Single().PartNumber);
+    //code change by chatgpt
+    // AssertEqual("MIG-V7", (await records.QueryAsync(new ProductionRecordQuery(null, null, null, "MIG-V7", null, null), CancellationToken.None)).Single().PartNumber);
+    AssertEqual("MIG-V7", (await records.QueryAsync(new ProductionRecordQuery(null, null, null, "MIG-V7", null), CancellationToken.None)).Single().PartNumber);
     await using (var connection = await database.OpenConnectionAsync(CancellationToken.None))
     await using (var command = connection.CreateCommand())
     {
@@ -205,15 +214,20 @@ await RunAsync("v7 migration removes obsolete timing lifecycle columns without l
     }
 });
 
-await RunAsync("NG and rework attempts share one logical QR part", async () =>
+//code change by chatgpt
+// await RunAsync("NG and rework attempts share one logical QR part", async () =>
+await RunAsync("NG and rework attempts share one logical Part Number", async () =>
 {
     var (repo, _) = await CreateRepositoriesAsync();
     var firstTest = new DateTimeOffset(2026, 8, 14, 10, 0, 0, TimeSpan.Zero);
     var reworkTest = firstTest.AddMinutes(30);
-    await repo.InsertAsync(SampleRecord(1101, firstTest, ProductionResult.NG) with { QrCode = "DYN240812002271" }, CancellationToken.None);
-    await repo.InsertAsync(SampleRecord(1102, reworkTest, ProductionResult.OK) with { QrCode = "DYN240812002271" }, CancellationToken.None);
+    // await repo.InsertAsync(SampleRecord(1101, firstTest, ProductionResult.NG) with { QrCode = "DYN240812002271" }, CancellationToken.None);
+    // await repo.InsertAsync(SampleRecord(1102, reworkTest, ProductionResult.OK) with { QrCode = "DYN240812002271" }, CancellationToken.None);
+    await repo.InsertAsync(SampleRecord(1101, firstTest, ProductionResult.NG) with { PartNumber = "PART-REWORK-001" }, CancellationToken.None);
+    await repo.InsertAsync(SampleRecord(1102, reworkTest, ProductionResult.OK) with { PartNumber = "PART-REWORK-001" }, CancellationToken.None);
 
-    var parts = await repo.QueryLogicalPartsAsync(new LogicalPartQuery(null, null, null, null, null, null, 10), CancellationToken.None);
+    // var parts = await repo.QueryLogicalPartsAsync(new LogicalPartQuery(null, null, null, null, null, null, 10), CancellationToken.None);
+    var parts = await repo.QueryLogicalPartsAsync(new LogicalPartQuery(null, null, null, null, null, 10), CancellationToken.None);
     var details = await repo.GetLogicalPartByIdAsync(parts[0].Id, CancellationToken.None);
 
     AssertEqual(1, parts.Count);
@@ -223,21 +237,27 @@ await RunAsync("NG and rework attempts share one logical QR part", async () =>
     AssertEqual("OK", details.Attempts[1].Result);
 });
 
-await RunAsync("recent parts returns ten logical QR parts", async () =>
+//code change by chatgpt
+// await RunAsync("recent parts returns ten logical QR parts", async () =>
+await RunAsync("recent parts returns ten logical Part Number records", async () =>
 {
     var (repo, _) = await CreateRepositoriesAsync();
     var start = new DateTimeOffset(2026, 8, 14, 8, 0, 0, TimeSpan.Zero);
     for (var index = 0; index < 12; index++)
     {
-        await repo.InsertAsync(SampleRecord(1200 + index, start.AddMinutes(index), ProductionResult.OK), CancellationToken.None);
+        // await repo.InsertAsync(SampleRecord(1200 + index, start.AddMinutes(index), ProductionResult.OK), CancellationToken.None);
+        await repo.InsertAsync(SampleRecord(1200 + index, start.AddMinutes(index), ProductionResult.OK) with { PartNumber = $"PART-{index:000}" }, CancellationToken.None);
     }
 
-    await repo.InsertAsync(SampleRecord(1300, start.AddHours(1), ProductionResult.REWORK) with { QrCode = "DYNTEST1200" }, CancellationToken.None);
-    var parts = await repo.QueryLogicalPartsAsync(new LogicalPartQuery(null, null, null, null, null, null, 10), CancellationToken.None);
+    // await repo.InsertAsync(SampleRecord(1300, start.AddHours(1), ProductionResult.REWORK) with { QrCode = "DYNTEST1200" }, CancellationToken.None);
+    await repo.InsertAsync(SampleRecord(1300, start.AddHours(1), ProductionResult.REWORK) with { PartNumber = "PART-000" }, CancellationToken.None);
+    // var parts = await repo.QueryLogicalPartsAsync(new LogicalPartQuery(null, null, null, null, null, null, 10), CancellationToken.None);
+    var parts = await repo.QueryLogicalPartsAsync(new LogicalPartQuery(null, null, null, null, null, 10), CancellationToken.None);
 
     AssertEqual(12, await repo.CountLogicalPartsAsync(CancellationToken.None));
     AssertEqual(10, parts.Count);
-    AssertEqual(10, parts.Select(part => part.QrCode).Distinct(StringComparer.OrdinalIgnoreCase).Count());
+    // AssertEqual(10, parts.Select(part => part.QrCode).Distinct(StringComparer.OrdinalIgnoreCase).Count());
+    AssertEqual(10, parts.Select(part => part.PartNumber).Distinct(StringComparer.OrdinalIgnoreCase).Count());
 });
 
 await RunAsync("overnight shift counters span midnight", async () =>
@@ -261,20 +281,26 @@ await RunAsync("overnight shift counters span midnight", async () =>
     AssertEqual(1, counters.Rework);
 });
 
-await RunAsync("history filters by date shift part QR and result", async () =>
+//code change by chatgpt
+// await RunAsync("history filters by date shift part QR and result", async () =>
+await RunAsync("history filters by date shift part and result", async () =>
 {
     var (repo, _) = await CreateRepositoriesAsync();
     var morning = new DateTimeOffset(2026, 8, 13, 7, 15, 0, TimeSpan.Zero);
     var afternoon = new DateTimeOffset(2026, 8, 13, 15, 15, 0, TimeSpan.Zero);
-    await repo.InsertAsync(SampleRecord(4001, morning, ProductionResult.OK) with { PartNumber = "78654-A01", QrCode = "QR-A" }, CancellationToken.None);
-    await repo.InsertAsync(SampleRecord(4002, afternoon, ProductionResult.NG) with { PartNumber = "78654-B02", QrCode = "QR-B" }, CancellationToken.None);
+    //code change by chatgpt
+    // await repo.InsertAsync(SampleRecord(4001, morning, ProductionResult.OK) with { PartNumber = "78654-A01", QrCode = "QR-A" }, CancellationToken.None);
+    // await repo.InsertAsync(SampleRecord(4002, afternoon, ProductionResult.NG) with { PartNumber = "78654-B02", QrCode = "QR-B" }, CancellationToken.None);
+    await repo.InsertAsync(SampleRecord(4001, morning, ProductionResult.OK) with { PartNumber = "78654-A01" }, CancellationToken.None);
+    await repo.InsertAsync(SampleRecord(4002, afternoon, ProductionResult.NG) with { PartNumber = "78654-B02" }, CancellationToken.None);
 
     var query = new ProductionRecordQuery(
         new DateTimeOffset(2026, 8, 13, 0, 0, 0, TimeSpan.Zero),
         new DateTimeOffset(2026, 8, 13, 23, 59, 59, TimeSpan.Zero),
         "SHIFT B",
         "B02",
-        "QR-B",
+        //code change by chatgpt
+        // "QR-B",
         ProductionResult.NG,
         20);
 
