@@ -38,6 +38,8 @@ const context = vm.createContext({
   updateMappingDerivedControls: () => {},
   renderMappingLiveValues: () => {}
 });
+//code change by chatgpt
+context.leakUnit = () => String(context.state.config?.leakTestUnit || "").trim() || "LPM";
 
 for (const name of [
   "registerCountForDataType",
@@ -57,8 +59,7 @@ for (const name of [
   "formatLeakTestValue",
   "formatLeakRange",
   //code change by chatgpt
-  // "renderCurrentPart",
-  "leakUnit",
+  // "leakUnit",
   "renderCurrentPart",
   "resultClass",
   "renderBuildInfo"
