@@ -1171,19 +1171,155 @@ await RunAsync("daily reports recover and roll over month year and canonical fil
     PartHistoryExcelExporter.ValidateWorkbook(await File.ReadAllBytesAsync(august23), 2);
 });
 
-await RunAsync("failed Data Saved acknowledgement does not block later local History rows", async () =>
+await RunAsync("Data Saved pulses HIGH for about two seconds and returns LOW only after a durable save", async () =>
 {
-    await using var harness = await PartDataHarness.CreateAsync(enableDataSaved: true, failDataSavedWrites: true);
+    await using var harness = await PartDataHarness.CreateAsync(enableDataSaved: true);
+    var settings = harness.Settings.Current;
+
+    harness.Plc.Enqueue(PartSnapshot(8200, "ACK-PULSE", "QR-PULSE", 0.100m));
+    var processing = harness.Trigger.ProcessPollAsync(
+        settings,
+        PartDataReadySignals(true, "ACK-PULSE"),
+        CancellationToken.None);
+
+    await WaitUntilAsync(
+        () => harness.Plc.SuccessfulWrites.Any(write =>
+            write.SignalName == PlcSafety.DataSavedSignalName &&
+            write.Value is true),
+        TimeSpan.FromSeconds(2),
+        "DATA SAVED did not go HIGH after the durable save");
+
+    AssertEqual(1, await harness.Records.CountAsync(CancellationToken.None));
+
+    var high = harness.Plc.SuccessfulWrites.Single(write =>
+        write.SignalName == PlcSafety.DataSavedSignalName &&
+        write.Value is true);
+
+    await Task.Delay(1100);
+
+    AssertTrue(
+        !harness.Plc.SuccessfulWrites.Any(write =>
+            write.SignalName == PlcSafety.DataSavedSignalName &&
+            write.Value is false &&
+            write.At >= high.At),
+        "DATA SAVED returned LOW before the required two-second pulse completed");
+
+    await processing;
+
+    var low = harness.Plc.SuccessfulWrites.Single(write =>
+        write.SignalName == PlcSafety.DataSavedSignalName &&
+        write.Value is false &&
+        write.At >= high.At);
+
+    AssertTrue(
+        low.At - high.At >= TimeSpan.FromMilliseconds(1800),
+        $"DATA SAVED pulse was too short: {low.At - high.At}");
+});
+
+await RunAsync("failed Data Saved acknowledgement stays pending and retries without another History insert", async () =>
+{
+    await using var harness = await PartDataHarness.CreateAsync(
+        enableDataSaved: true,
+        failDataSavedHighWritesRemaining: 1);
     var settings = harness.Settings.Current;
 
     harness.Plc.Enqueue(PartSnapshot(8201, "ACK100", "QR100", 0.100m));
-    await harness.Trigger.ProcessPollAsync(settings, PartDataReadySignals(true, "ACK100"), CancellationToken.None);
+    await harness.Trigger.ProcessPollAsync(
+        settings,
+        PartDataReadySignals(true, "ACK100"),
+        CancellationToken.None);
+
+    AssertEqual(1, await harness.Records.CountAsync(CancellationToken.None));
+    AssertEqual(1, harness.Plc.SnapshotReadCount);
 
     harness.Plc.Enqueue(PartSnapshot(8202, "ACK101", "QR101", 0.101m));
-    await harness.Trigger.ProcessPollAsync(settings, PartDataReadySignals(true, "ACK101"), CancellationToken.None);
+    await harness.Trigger.ProcessPollAsync(
+        settings,
+        PartDataReadySignals(true, "ACK101"),
+        CancellationToken.None);
+
+    AssertEqual(1, await harness.Records.CountAsync(CancellationToken.None));
+    AssertEqual(1, harness.Plc.SnapshotReadCount);
+
+    await Task.Delay(TimeSpan.FromSeconds(5.1));
+    await harness.Trigger.ProcessPollAsync(
+        settings,
+        PartDataReadySignals(true, "ACK100"),
+        CancellationToken.None);
+
+    AssertEqual(1, await harness.Records.CountAsync(CancellationToken.None));
+    AssertEqual(1, harness.Plc.SnapshotReadCount);
+
+    await harness.Trigger.ProcessPollAsync(
+        settings,
+        PartDataReadySignals(true, "ACK101"),
+        CancellationToken.None);
 
     AssertEqual(2, await harness.Records.CountAsync(CancellationToken.None));
     AssertEqual(2, harness.Plc.SnapshotReadCount);
+});
+
+await RunAsync("failed Data Saved LOW write retries the acknowledgement without duplicating the durable row", async () =>
+{
+    await using var harness = await PartDataHarness.CreateAsync(
+        enableDataSaved: true,
+        failDataSavedLowWritesRemaining: 1);
+    var settings = harness.Settings.Current;
+
+    harness.Plc.Enqueue(PartSnapshot(8203, "ACK-LOW", "QR-LOW", 0.102m));
+    await harness.Trigger.ProcessPollAsync(
+        settings,
+        PartDataReadySignals(true, "ACK-LOW"),
+        CancellationToken.None);
+
+    AssertEqual(1, await harness.Records.CountAsync(CancellationToken.None));
+    AssertEqual(1, harness.Plc.SnapshotReadCount);
+
+    await Task.Delay(TimeSpan.FromSeconds(5.1));
+    await harness.Trigger.ProcessPollAsync(
+        settings,
+        PartDataReadySignals(true, "ACK-LOW"),
+        CancellationToken.None);
+
+    AssertEqual(1, await harness.Records.CountAsync(CancellationToken.None));
+    AssertEqual(1, harness.Plc.SnapshotReadCount);
+    AssertEqual(
+        2,
+        harness.Plc.SuccessfulWrites.Count(write =>
+            write.SignalName == PlcSafety.DataSavedSignalName &&
+            write.Value is true));
+});
+
+await RunAsync("session reset with D1075 still HIGH re-acknowledges an already durable part without another insert", async () =>
+{
+    await using var harness = await PartDataHarness.CreateAsync(
+        enableDataSaved: true,
+        failDataSavedHighWritesRemaining: 1);
+    var settings = harness.Settings.Current;
+
+    harness.Plc.Enqueue(PartSnapshot(8204, "ACK-RESTART", "QR-RESTART", 0.103m));
+    await harness.Trigger.ProcessPollAsync(
+        settings,
+        PartDataReadySignals(true, "ACK-RESTART"),
+        CancellationToken.None);
+
+    AssertEqual(1, await harness.Records.CountAsync(CancellationToken.None));
+    AssertEqual(1, harness.Plc.SnapshotReadCount);
+
+    harness.Trigger.ResetSession();
+
+    await harness.Trigger.ProcessPollAsync(
+        settings,
+        PartDataReadySignals(true, "ACK-RESTART"),
+        CancellationToken.None);
+
+    AssertEqual(1, await harness.Records.CountAsync(CancellationToken.None));
+    AssertEqual(1, harness.Plc.SnapshotReadCount);
+    AssertTrue(
+        harness.Plc.SuccessfulWrites.Any(write =>
+            write.SignalName == PlcSafety.DataSavedSignalName &&
+            write.Value is true),
+        "already durable part was not re-acknowledged after session reset");
 });
 
 await RunAsync("production acquisition saves new Part Numbers once while D1075 remains HIGH and retries failed inserts", async () =>
@@ -1917,7 +2053,11 @@ internal sealed class PartDataHarness : IAsyncDisposable
     public TestPlcClient Plc { get; }
     public PartDataReadyService Trigger { get; }
 
-    public static async Task<PartDataHarness> CreateAsync(bool enableDataSaved = false, bool failDataSavedWrites = false)
+    public static async Task<PartDataHarness> CreateAsync(
+        bool enableDataSaved = false,
+        bool failDataSavedWrites = false,
+        int failDataSavedHighWritesRemaining = 0,
+        int failDataSavedLowWritesRemaining = 0)
     {
         var root = Path.Combine(Path.GetTempPath(), $"dynak-part-data-{Guid.NewGuid():N}");
         var settings = new AppSettings
@@ -1933,7 +2073,12 @@ internal sealed class PartDataHarness : IAsyncDisposable
         var records = new ProductionRepository(database);
         var events = new EventRepository(database);
         var acquisition = new AcquisitionState();
-        var plc = new TestPlcClient { FailWrites = failDataSavedWrites };
+        var plc = new TestPlcClient
+        {
+            FailWrites = failDataSavedWrites,
+            FailDataSavedHighWritesRemaining = failDataSavedHighWritesRemaining,
+            FailDataSavedLowWritesRemaining = failDataSavedLowWritesRemaining
+        };
         var handshake = new PlcHandshakeService(plc, store, NullLogger<PlcHandshakeService>.Instance);
         var trigger = new PartDataReadyService(records, events, acquisition, handshake, new LiveLeakValueFileWriter(), plc, NullLogger<PartDataReadyService>.Instance);
         return new PartDataHarness(store, records, plc, handshake, trigger);
@@ -1951,7 +2096,11 @@ internal sealed class TestPlcClient : IPlcClient
     private readonly Queue<PartDataSnapshot?> _snapshots = new();
 
     public bool FailWrites { get; init; }
+    public int FailDataSavedHighWritesRemaining { get; set; }
+    public int FailDataSavedLowWritesRemaining { get; set; }
     public int SnapshotReadCount { get; private set; }
+    public List<TestPlcWrite> WriteAttempts { get; } = [];
+    public List<TestPlcWrite> SuccessfulWrites { get; } = [];
 
     public void Enqueue(PartDataSnapshot? snapshot) => _snapshots.Enqueue(snapshot);
 
@@ -1968,10 +2117,44 @@ internal sealed class TestPlcClient : IPlcClient
         SnapshotReadCount++;
         return Task.FromResult(_snapshots.Count == 0 ? null : _snapshots.Dequeue());
     }
-    public Task WriteConfiguredSignalAsync(string signalName, object? value, CancellationToken cancellationToken) =>
-        FailWrites ? Task.FromException(new IOException("Simulated PLC handshake rejection.")) : Task.CompletedTask;
+
+    public Task WriteConfiguredSignalAsync(string signalName, object? value, CancellationToken cancellationToken)
+    {
+        var write = new TestPlcWrite(signalName, value, DateTimeOffset.Now);
+        WriteAttempts.Add(write);
+
+        if (FailWrites)
+        {
+            return Task.FromException(new IOException("Simulated PLC handshake rejection."));
+        }
+
+        if (string.Equals(signalName, PlcSafety.DataSavedSignalName, StringComparison.OrdinalIgnoreCase) &&
+            value is true &&
+            FailDataSavedHighWritesRemaining > 0)
+        {
+            FailDataSavedHighWritesRemaining--;
+            return Task.FromException(new IOException("Simulated DATA SAVED HIGH rejection."));
+        }
+
+        if (string.Equals(signalName, PlcSafety.DataSavedSignalName, StringComparison.OrdinalIgnoreCase) &&
+            value is false &&
+            FailDataSavedLowWritesRemaining > 0)
+        {
+            FailDataSavedLowWritesRemaining--;
+            return Task.FromException(new IOException("Simulated DATA SAVED LOW rejection."));
+        }
+
+        SuccessfulWrites.Add(write);
+        return Task.CompletedTask;
+    }
+
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 }
+
+internal sealed record TestPlcWrite(
+    string SignalName,
+    object? Value,
+    DateTimeOffset At);
 
 internal sealed class ModbusTestServer : IAsyncDisposable
 {
