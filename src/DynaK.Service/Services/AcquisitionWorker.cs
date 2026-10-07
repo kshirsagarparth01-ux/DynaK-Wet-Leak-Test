@@ -434,7 +434,8 @@ public sealed class AcquisitionWorker : BackgroundService
             PlcSignalMapping.OkResultSignalName,
             PlcSignalMapping.NgResultSignalName,
             PlcSignalMapping.PartDataReadySignalName,
-            "Part Number"
+            PlcSignalMapping.SerialNumberSignalName,
+            PlcSignalMapping.ModelNumberSignalName
         })
         {
             if (!signals.TryGetValue(signalName, out var value))
